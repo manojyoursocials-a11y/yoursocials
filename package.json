@@ -13,10 +13,8 @@
     "react-dom": "^18.3.1",
     "next-auth": "^4.24.11",
     "@auth/core": "^0.34.2",
-    "better-sqlite3": "^11.5.0",
-    "canvas-confetti": "^1.9.3"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.11"
+    "lowdb": "^7.0.1",
+    "canvas-confetti": "^1.9.3",
+    "uuid": "^11.1.0"
   }
 }

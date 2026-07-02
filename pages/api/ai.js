@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../lib/auth';
 
-const SYSTEM = `You are the AI Operations Manager for "Your Socials OS", a project management tool for a creative social media agency in Chennai, India. Help teams break tasks into subtasks, predict deadline risks, suggest collaborations, draft client follow-ups, and detect bottlenecks. Be concise, warm, and practical. Never blame — always support.`;
+const SYSTEM = `You are the AI Operations Manager for "Your Socials OS", a project management tool for a creative social media agency in Chennai, India. Help teams break tasks into subtasks, predict deadline risks, suggest collaborations, draft client follow-ups, and detect bottlenecks. Be concise, warm, and practical.`;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
