@@ -7,15 +7,18 @@ export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
   const userId = session.user.id;
+  const isAdmin = session.user.role === 'admin';
   const db = getDb();
 
   if (req.method === 'GET') {
     if (req.query.member) return res.json(await db.getTasksByMember(req.query.member));
+    if (req.query.client) return res.json(await db.getTasksByClient(req.query.client));
+    if (req.query.today === '1') return res.json(await db.getTodayTasks());
     return res.json(await db.getTasks());
   }
 
   if (req.method === 'POST') {
-    const { title, description, link, priority, owner_id, client_id, deadline, estimated_hours, ai_checklist } = req.body;
+    const { title, description, link, priority, owner_id, client_id, deadline, post_date, estimated_hours, ai_checklist } = req.body;
     if (!title) return res.status(400).json({ error: 'Title required' });
     const task = await db.createTask({
       id: uuid(), title,
@@ -25,6 +28,7 @@ export default async function handler(req, res) {
       owner_id: owner_id || userId,
       client_id: client_id || null,
       deadline: deadline || null,
+      post_date: post_date || null,
       estimated_hours: estimated_hours || null,
       ai_checklist: typeof ai_checklist === 'string' ? ai_checklist : JSON.stringify(ai_checklist || []),
       created_by: userId,
@@ -38,20 +42,28 @@ export default async function handler(req, res) {
     const id = body.id;
     if (!id) return res.status(400).json({ error: 'id required' });
 
-    // If body has 'status' but no 'title' — it's a STATUS MOVE
+    // STATUS MOVE — only status in body
     if (body.status !== undefined && body.title === undefined) {
       await db.moveTask(id, body.status);
       if (body.status === 'done') await db.addCoins(userId, 50);
       return res.json({ ok: true });
     }
 
-    // If body has 'title' — it's a FULL EDIT
+    // EDIT — has title, check permissions
     if (body.title !== undefined) {
+      if (!isAdmin) {
+        // Only assigner (created_by) or assignee (owner_id) can edit
+        const task = await db.getTaskById(id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+        if (task.created_by !== userId && task.owner_id !== userId) {
+          return res.status(403).json({ error: 'Only the assigner or assignee can edit this task' });
+        }
+      }
       await db.editTask(id, body);
       return res.json({ ok: true });
     }
 
-    return res.status(400).json({ error: 'Provide status (to move) or title (to edit)' });
+    return res.status(400).json({ error: 'Provide status or title' });
   }
 
   if (req.method === 'DELETE') {
