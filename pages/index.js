@@ -1,6 +1,6 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { Card, Ring, ProgressBar, Tag, Avatar, SectionLabel, Spinner, MEMBER_COLORS, api } from '../components/UI';
 
@@ -12,15 +12,20 @@ export default function Dashboard() {
 
   useEffect(() => { if (status === 'unauthenticated') router.replace('/login'); }, [status]);
 
-  useEffect(() => {
-    if (status === "authenticated") { fetch("/api/setup", {method:"POST"}).finally(() => fetchData()); }
-  }, [status]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     const d = await api('/api/dashboard');
     setData(d);
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/setup", {method:"POST"}).finally(() => fetchData());
+      // Live refresh every 10 seconds — Fix #6
+      const interval = setInterval(fetchData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [status, fetchData]);
 
   if (status === 'loading' || loading) {
     return (
