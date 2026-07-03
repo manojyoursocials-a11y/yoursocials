@@ -10,10 +10,7 @@ export default async function handler(req, res) {
   const db = getDb();
 
   if (req.method === 'GET') {
-    // ?member=id returns tasks for a specific member
-    if (req.query.member) {
-      return res.json(await db.getTasksByMember(req.query.member));
-    }
+    if (req.query.member) return res.json(await db.getTasksByMember(req.query.member));
     return res.json(await db.getTasks());
   }
 
@@ -21,23 +18,40 @@ export default async function handler(req, res) {
     const { title, description, link, priority, owner_id, client_id, deadline, estimated_hours, ai_checklist } = req.body;
     if (!title) return res.status(400).json({ error: 'Title required' });
     const task = await db.createTask({
-      id: uuid(), title, description: description||'', link: link||null,
-      priority: priority||'P3', owner_id: owner_id||userId,
-      client_id: client_id||null, deadline: deadline||null,
-      estimated_hours: estimated_hours||null,
-      ai_checklist: typeof ai_checklist==='string'?ai_checklist:JSON.stringify(ai_checklist||[]),
+      id: uuid(), title,
+      description: description || '',
+      link: link || null,
+      priority: priority || 'P3',
+      owner_id: owner_id || userId,
+      client_id: client_id || null,
+      deadline: deadline || null,
+      estimated_hours: estimated_hours || null,
+      ai_checklist: typeof ai_checklist === 'string' ? ai_checklist : JSON.stringify(ai_checklist || []),
       created_by: userId,
     });
-    await db.addCoins(userId, 10); // Fix #7: task created = 10 coins
+    await db.addCoins(userId, 10);
     return res.status(201).json(task);
   }
 
   if (req.method === 'PATCH') {
-    const { id, ...updates } = req.body;
-    if (!id) return res.status(400).json({ error: 'ID required' });
-    await db.updateTask(id, updates);
-    if (updates.status === 'done') await db.addCoins(userId, 50); // Fix #7: task done = 50 coins
-    return res.json({ ok: true });
+    const body = req.body;
+    const id = body.id;
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    // If body has 'status' but no 'title' — it's a STATUS MOVE
+    if (body.status !== undefined && body.title === undefined) {
+      await db.moveTask(id, body.status);
+      if (body.status === 'done') await db.addCoins(userId, 50);
+      return res.json({ ok: true });
+    }
+
+    // If body has 'title' — it's a FULL EDIT
+    if (body.title !== undefined) {
+      await db.editTask(id, body);
+      return res.json({ ok: true });
+    }
+
+    return res.status(400).json({ error: 'Provide status (to move) or title (to edit)' });
   }
 
   if (req.method === 'DELETE') {
