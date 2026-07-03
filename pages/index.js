@@ -13,7 +13,7 @@ export default function Dashboard() {
   useEffect(() => { if (status === 'unauthenticated') router.replace('/login'); }, [status]);
 
   useEffect(() => {
-    if (status === 'authenticated') fetchData();
+    if (status === "authenticated") { fetch("/api/setup", {method:"POST"}).finally(() => fetchData()); }
   }, [status]);
 
   async function fetchData() {
