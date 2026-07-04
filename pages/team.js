@@ -58,7 +58,7 @@ export default function Team() {
           <Btn variant="ghost" onClick={()=>{setForm({job_title:session?.user?.job_title||'',role:session?.user?.role||'member'});setModal(true);}}>✏️ Edit My Profile</Btn>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:16,marginBottom:selected?24:0}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:16,marginBottom:selected?24:0}}>
           {members.length===0
             ? <EmptyState emoji="👥" title="No team yet" subtitle="Members appear when they log in."/>
             : members.map((m,i)=>{

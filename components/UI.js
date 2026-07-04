@@ -13,7 +13,7 @@ export function Card({ children, style, hover, onClick }) {
 export function Modal({ open, onClose, title, children, width=560 }) {
   useEffect(()=>{const fn=e=>e.key==='Escape'&&onClose?.();window.addEventListener('keydown',fn);return()=>window.removeEventListener('keydown',fn);},[onClose]);
   if(!open) return null;
-  return <div onClick={e=>e.target===e.currentTarget&&onClose?.()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+  return <div onClick={e=>e.target===e.currentTarget&&onClose?.()} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',paddingTop:20}}>
     <div className="scale-in" style={{background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:'var(--r-lg)',padding:28,width:'100%',maxWidth:width,maxHeight:'90vh',overflowY:'auto'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div style={{fontWeight:800,fontSize:'1rem'}}>{title}</div>

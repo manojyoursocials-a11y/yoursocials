@@ -118,7 +118,7 @@ export default function Analytics() {
 
         {/* Overview */}
         {viewTab==='overview'&&(
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:16}}>
             <Card>
               <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',color:'var(--muted)',marginBottom:14}}>Status Breakdown</div>
               {[['📋 To Do',todo,'var(--muted2)'],['⚡ In Progress',inProg,'var(--cyan)'],['👁️ Under Review',review,'var(--yellow)'],['✅ Done',done,'var(--green)']].map(([l,v,c])=>(

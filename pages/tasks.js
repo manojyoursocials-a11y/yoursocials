@@ -4,6 +4,18 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { Btn, Modal, Input, Select, Textarea, Tag, Avatar, Spinner, launchConfetti, toast, sounds, askAI } from '../components/UI';
 
+// ── Mobile detection ───────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = React.useState(false);
+  React.useEffect(() => {
+    const check = () => setMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return mobile;
+}
+
 const COLS = [
   { id:'todo',       label:'To Do',       emoji:'📋', color:'#9090AA' },
   { id:'inprogress', label:'In Progress',  emoji:'⚡', color:'#00D4FF' },
@@ -43,6 +55,8 @@ export default function Tasks() {
 
   const userId   = session?.user?.id;
   const isAdmin  = session?.user?.role === 'admin';
+  const isMobile = useIsMobile();
+  const [mobileCol, setMobileCol] = React.useState('todo'); // active column on mobile
 
   const [tasks,    setTasks]    = useState([]);
   const [members,  setMembers]  = useState([]);

@@ -74,7 +74,7 @@ export default function Clients() {
           <Btn onClick={()=>{setEditing(null);setForm(df());setModal(true);}}>+ Add Client</Btn>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:selected?'320px 1fr':'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
+        <div style={{display:'grid',gridTemplateColumns:selected?'320px 1fr':'repeat(auto-fill,minmax(260px,1fr))',gap:16}}>
           {/* Client cards */}
           <div style={selected?{display:'flex',flexDirection:'column',gap:12}:{display:'contents'}}>
             {clients.length===0

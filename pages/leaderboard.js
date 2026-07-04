@@ -19,7 +19,7 @@ export default function Leaderboard() {
       <div className="fade-up">
         <h2 style={{fontWeight:900,fontSize:'1.3rem',marginBottom:6}}>Leaderboard 🏆</h2>
         <p style={{fontSize:'.82rem',color:'var(--muted2)',marginBottom:24}}>Ranked by coins earned</p>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 280px',gap:16}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:16}}>
           <Card>
             <div style={{fontSize:'.68rem',fontWeight:700,textTransform:'uppercase',color:'var(--muted)',marginBottom:16}}>All Members</div>
             {members.length===0&&<div style={{color:'var(--muted)',fontSize:'.82rem'}}>No members yet.</div>}

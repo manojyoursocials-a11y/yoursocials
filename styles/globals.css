@@ -25,3 +25,39 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;display:inline-block;}
 input,select,textarea{color:var(--text);}
 select option{background:var(--surface2);color:var(--text);}
+
+/* ── Mobile responsive ─────────────────────────────── */
+@media (max-width: 767px) {
+  /* Kanban: stack columns vertically */
+  .kanban-grid { grid-template-columns: 1fr !important; }
+  /* Cards full width */
+  .card-grid   { grid-template-columns: 1fr !important; }
+  /* KPI row: 2 cols */
+  .kpi-grid    { grid-template-columns: 1fr 1fr !important; }
+  /* Hide today panel on mobile by default (toggle button shows it) */
+  .today-panel { display: none !important; }
+  /* Tables scroll */
+  .scroll-x    { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+@media (max-width: 400px) {
+  .kpi-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Touch & mobile optimisations ─────────────────────── */
+* { -webkit-tap-highlight-color: transparent; }
+html { height: -webkit-fill-available; }
+body { min-height: -webkit-fill-available; }
+
+/* Bottom-safe area for iPhone notch */
+.page-content { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+
+/* Bigger tap targets on mobile */
+@media (max-width: 767px) {
+  button, [role="button"] { min-height: 40px; }
+  select, input, textarea { font-size: 16px !important; } /* prevent iOS zoom */
+}
+
+/* Kanban scroll on mobile */
+@media (max-width: 767px) {
+  .kanban-col { max-height: calc(100dvh - 240px) !important; overflow-y: auto; }
+}

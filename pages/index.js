@@ -33,7 +33,7 @@ export default function Dashboard() {
           <h1 style={{fontSize:'1.8rem',fontWeight:900,letterSpacing:'-.03em',marginBottom:4}}>Hey {session?.user?.name?.split(' ')[0]||'there'} 👋</h1>
           <p style={{color:'var(--muted2)',fontSize:'.88rem'}}>{done} tasks done · {overdue>0?`${overdue} overdue ⚠️`:'no overdue ✅'} · {members.length} team members · <span style={{color:'var(--green)'}}>● live</span></p>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))',gap:14,marginBottom:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:14,marginBottom:20}}>
           {[{label:'Health Score',value:healthScore,suffix:'/100',color:'#7C5CFC',glow:'#7C5CFC'},{label:'Tasks Done',value:done,suffix:` of ${total}`,color:'var(--green)',glow:'#00E5A0'},{label:'In Progress',value:inProg,suffix:' tasks',color:'var(--cyan)',glow:'#00D4FF'},{label:'Under Review',value:review,suffix:' tasks',color:'var(--yellow)',glow:'#FFD60A'},{label:'Overdue',value:overdue,suffix:' tasks',color:overdue>0?'var(--red)':'var(--green)',glow:'#FF4D6D'},{label:'Avg Quality',value:avgQuality||'—',suffix:avgQuality?'/5':'',color:'var(--orange)',glow:'#FF8C42'}].map(k=>(
             <Card key={k.label} hover style={{position:'relative',overflow:'hidden'}}>
               <div style={{position:'absolute',top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${k.glow},transparent)`}}/>
@@ -42,7 +42,7 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:16,marginBottom:20}}>
           <Card>
             <div style={{fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',color:'var(--muted)',marginBottom:16}}>Team Performance</div>
             <div style={{display:'flex',alignItems:'center',gap:24}}>
@@ -68,7 +68,7 @@ export default function Dashboard() {
           </Card>
         </div>
         <div style={{fontSize:'.68rem',fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase',color:'var(--muted)',marginBottom:14,marginTop:8}}>Task Overview</div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:12,marginBottom:20}}>
           {[['📋','To Do',todo,'var(--muted2)'],['⚡','In Progress',inProg,'var(--cyan)'],['👁️','Under Review',review,'var(--yellow)'],['✅','Done',done,'var(--green)']].map(([e,l,v,c])=>(
             <Card key={l} hover onClick={()=>router.push('/tasks')} style={{textAlign:'center'}}>
               <div style={{fontSize:'1.6rem',marginBottom:6}}>{e}</div>
@@ -77,7 +77,7 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:16,marginBottom:20}}>
           <Card style={{background:'rgba(255,214,10,.04)',borderColor:'rgba(255,214,10,.15)'}}>
             <div style={{fontSize:'.72rem',fontWeight:700,textTransform:'uppercase',color:'var(--yellow)',marginBottom:10}}>This Week&apos;s Reward</div>
             {weekReward?<div style={{display:'flex',alignItems:'center',gap:16}}><div style={{fontSize:'2.2rem'}}>{weekReward.emoji}</div><div style={{flex:1}}><div style={{fontWeight:700,marginBottom:6}}>{weekReward.name}</div><ProgressBar value={completionPct} color="var(--yellow)"/><div style={{fontSize:'.72rem',color:'var(--muted2)',marginTop:4}}>{completionPct}% tasks complete</div></div></div>:<div style={{color:'var(--muted)',fontSize:'.82rem'}}>No weekly reward set</div>}
