@@ -1,5 +1,6 @@
 import { SessionProvider } from 'next-auth/react';
 import Head from 'next/head';
+import { Analytics } from '@vercel/analytics/next';
 import '../styles/globals.css';
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
@@ -13,6 +14,7 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
         <title>Your Socials OS</title>
       </Head>
       <Component {...pageProps}/>
+      <Analytics />
     </SessionProvider>
   );
 }
