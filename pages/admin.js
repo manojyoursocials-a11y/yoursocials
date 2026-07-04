@@ -111,7 +111,7 @@ export default function Admin() {
   function closeModal() { setModal(null); setEditing(null); setForm({}); }
 
   function defaults(type) {
-    if (type==='user')     return {name:'',email:'',password:'',role:'member',job_title:''};
+    if (type==='user')     return {name:'',email:'',password:'',role:'member',job_title:'',phone:'',image:''};
     if (type==='client')   return {name:'',contact_name:'',contact_email:'',contact_phone:'',industry:'',notes:'',status:'active'};
     if (type==='task')     return {title:'',description:'',link:'',priority:'P3',owner_id:'',client_id:'',deadline:'',estimated_hours:''};
     if (type==='reward')   return {name:'',emoji:'🎁',description:'',coin_cost:500,reward_type:'weekly'};
@@ -352,6 +352,7 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
       </div>
@@ -359,17 +360,42 @@ export default function Admin() {
       {/* ── MODALS ─────────────────────────────── */}
 
       {/* User modal */}
-      <Modal open={modal==='user'} onClose={closeModal} title={editing?'Edit User':'Add Team Member'} width={480}>
+      <Modal open={modal==='user'} onClose={closeModal} title={editing?'Edit User':'Add Team Member'} width={500}>
+        {/* Profile photo */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:'.73rem',fontWeight:600,color:'var(--muted2)',marginBottom:8,letterSpacing:'.04em'}}>PROFILE PHOTO</div>
+          <div style={{display:'flex',alignItems:'center',gap:14}}>
+            <div style={{width:54,height:54,borderRadius:'50%',overflow:'hidden',background:'var(--surface3)',border:'2px solid var(--border2)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              {form.image?<img src={form.image} alt="preview" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<span style={{fontSize:'1.5rem',opacity:.4}}>👤</span>}
+            </div>
+            <label style={{cursor:'pointer',padding:'7px 14px',background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:9,fontSize:'.8rem',color:'var(--muted2)',fontWeight:600,display:'inline-flex',alignItems:'center',gap:6}}>
+              📷 Upload Photo
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{
+                const file=e.target.files?.[0]; if(!file) return;
+                if(file.size>2*1024*1024){toast.error('Max 2MB');return;}
+                const reader=new FileReader();
+                reader.onload=ev=>setForm(f=>({...f,image:ev.target.result}));
+                reader.readAsDataURL(file);
+              }}/>
+            </label>
+            {form.image&&<button onClick={()=>setForm(f=>({...f,image:''}))} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'.82rem'}}>✕</button>}
+          </div>
+        </div>
+
         <Input label="Full Name *" value={form.name||''} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Arun Kumar"/>
         <Input label="Email *" type="email" value={form.email||''} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="arun@yoursocials.in" disabled={!!editing}/>
-        <Input label={editing?'New Password (blank = keep current)':'Password *'} type="password" value={form.password||''} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={editing?'Leave blank to keep':'Min 6 characters'}/>
+        <Input label="📱 Phone Number (used to login)" type="tel" value={form.phone||''} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="+91 98765 43210"/>
+        <div style={{fontSize:'.73rem',color:'var(--cyan)',background:'rgba(0,212,255,.06)',border:'1px solid rgba(0,212,255,.15)',borderRadius:8,padding:'7px 12px',marginBottom:14}}>
+          💡 Employee can log in using this phone number + their password
+        </div>
+        <Input label={editing?'New Password (blank = keep current)':'Password *'} type="password" value={form.password||''} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={editing?'Leave blank to keep current':'Min 6 characters'}/>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
           <Select label="Role" value={form.role||'member'} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
             <option value="member">👤 Member</option>
             <option value="admin">👑 Admin</option>
             <option value="viewer">👁️ Viewer</option>
           </Select>
-          <Input label="Job Title" value={form.job_title||''} onChange={e=>setForm(f=>({...f,job_title:e.target.value}))} placeholder="Content Lead…"/>
+          <Input label="Job Title" value={form.job_title||''} onChange={e=>setForm(f=>({...f,job_title:e.target.value}))} placeholder="Content Lead, Designer…"/>
         </div>
         <div style={{display:'flex',gap:10}}>
           <Btn variant="ghost" onClick={closeModal} style={{flex:1}}>Cancel</Btn>
