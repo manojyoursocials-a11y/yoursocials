@@ -34,37 +34,32 @@ export default async function handler(req, res) {
       ai_checklist: typeof ai_checklist === 'string' ? ai_checklist : JSON.stringify(ai_checklist || []),
       created_by: userId,
     });
-    await db.addCoins(userId, 10); // Task created = 10 coins (once, on creation)
+    await db.addCoins(userId, 10);
     return res.status(201).json(task);
   }
 
   if (req.method === 'PATCH') {
     const body = req.body;
-    const id   = body.id;
-    if (!id) return res.status(400).json({ error: 'id required' });
 
-    // ── BULK DELETE done tasks ──────────────────────────────
-    if (body.bulkDelete && Array.isArray(body.ids)) {
+    // ── BULK DELETE — check FIRST before id validation ──────
+    if (body.bulkDelete === true && Array.isArray(body.ids) && body.ids.length > 0) {
       await db.deleteTasks(body.ids);
       return res.json({ ok: true, deleted: body.ids.length });
     }
 
+    const id = body.id;
+    if (!id) return res.status(400).json({ error: 'id required' });
+
     // ── STATUS MOVE ─────────────────────────────────────────
     if (body.status !== undefined && body.title === undefined) {
       const { reviewAwarded, doneAwarded } = await db.moveTask(id, body.status);
-
-      // Done coins — only if this task hasn't been awarded done coins before
       if (body.status === 'done' && doneAwarded) {
         await db.addCoins(userId, 30);
       }
-
-      // Under Review coins — only if task hasn't been awarded review coins before
-      // AND only for Graphic Designer role
       if (body.status === 'review' && reviewAwarded) {
         const isDesigner = jobTitle.includes('graphic') || jobTitle.includes('designer');
         if (isDesigner) await db.addCoins(userId, 30);
       }
-
       return res.json({ ok: true });
     }
 

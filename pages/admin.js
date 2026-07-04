@@ -148,6 +148,42 @@ export default function Admin() {
           ))}
         </div>
 
+        {/* ── COINS ─────────────────────────────── */}
+        {tab==='Coins'&&(
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18,flexWrap:'wrap',gap:12}}>
+              <div>
+                <h3 style={{fontWeight:900,fontSize:'1.1rem',marginBottom:4}}>🪙 Coin Management</h3>
+                <p style={{fontSize:'.82rem',color:'var(--muted2)'}}>Reset coin balances per employee or all at once</p>
+              </div>
+              <Btn variant="danger" onClick={()=>setCoinResetUser('all')}>🔄 Reset All Coins</Btn>
+            </div>
+            <Card style={{marginBottom:18,background:'rgba(255,214,10,.04)',borderColor:'rgba(255,214,10,.2)'}}>
+              <div style={{fontSize:'.78rem',color:'var(--muted2)',lineHeight:1.7}}>
+                💡 Resetting sets the balance to <strong>0</strong>. Task reward flags are kept — so coins won't be re-awarded for the same task after a reset. Use this at the start of a new month or season.
+              </div>
+            </Card>
+            {users.length===0&&<div style={{color:'var(--muted)',fontSize:'.85rem',textAlign:'center',padding:'40px 0'}}>No team members found.</div>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
+              {users.map((u,i)=>(
+                <Card key={u.id} style={{display:'flex',alignItems:'center',gap:12}}>
+                  <Avatar name={u.name||u.email} size={42} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:'.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{u.name||u.email?.split('@')[0]}</div>
+                    <div style={{fontSize:'.72rem',color:'var(--muted)',marginBottom:3}}>{u.job_title||u.role}</div>
+                    <div style={{fontSize:'.85rem',color:'var(--yellow)',fontWeight:800}}>🪙 {(u.coins||0).toLocaleString()}</div>
+                  </div>
+                  <Btn variant={u.coins>0?'danger':'ghost'} size="sm"
+                    onClick={()=>setCoinResetUser(u)}
+                    style={{flexShrink:0,opacity:u.coins===0?.45:1}}>
+                    {u.coins===0?'✓ 0':'Reset'}
+                  </Btn>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── USERS ─────────────────────────────── */}
         {tab==='Users'&&(
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
@@ -445,12 +481,13 @@ export default function Admin() {
           <div style={{display:'flex',gap:10}}>
             <Btn variant="ghost" onClick={()=>setCoinResetUser(null)} style={{flex:1}}>Cancel</Btn>
             <Btn variant="danger" onClick={async()=>{
-              const id = coinResetUser==='all'?'all':coinResetUser.id;
-              const r = await api('/api/users','PATCH',{id,action:'resetCoins'});
+              const targetId = coinResetUser==='all'?'all':coinResetUser.id;
+              const r = await api('/api/users','PATCH',{id:targetId,action:'resetCoins'});
               if(r.error){toast.error(r.error);return;}
-              toast.success(coinResetUser==='all'?'All coins reset to 0!':'Coins reset for '+coinResetUser.name,'🔄');
+              toast.success(coinResetUser==='all'?'All coins reset to 0! 🔄':'Coins reset for '+coinResetUser.name+' 🔄');
               setCoinResetUser(null);
-              api('/api/members').then(d=>setUsers(Array.isArray(d)?d:[]));
+              // Refresh user list to show updated balances
+              api('/api/users').then(d=>setUsers(Array.isArray(d)?d:[]));
             }} style={{flex:1}}>Yes, Reset</Btn>
           </div>
         </>}

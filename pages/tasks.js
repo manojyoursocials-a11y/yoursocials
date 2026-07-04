@@ -226,9 +226,11 @@ export default function Tasks() {
   async function clearSelectedDone() {
     if (selectedDone.size === 0) return;
     const ids = Array.from(selectedDone);
-    await fetchJ('/api/tasks', 'PATCH', { id: ids[0], bulkDelete: true, ids });
+    const r = await fetchJ('/api/tasks', 'PATCH', { bulkDelete: true, ids });
+    if (r.error) { toast.error('Failed: ' + r.error); return; }
     setSelectedDone(new Set());
-    toast.success(ids.length + ' done tasks cleared');
+    toast.success(ids.length + ' done task' + (ids.length > 1 ? 's' : '') + ' cleared');
+    sounds.pop();
     reload();
   }
 
@@ -236,9 +238,11 @@ export default function Tasks() {
     const doneIds = tasks.filter(t => t.status === 'done').map(t => t.id);
     if (!doneIds.length) { toast.info('No done tasks to clear'); return; }
     if (!confirm('Clear ALL ' + doneIds.length + ' done tasks? This cannot be undone.')) return;
-    await fetchJ('/api/tasks', 'PATCH', { id: doneIds[0], bulkDelete: true, ids: doneIds });
+    const r = await fetchJ('/api/tasks', 'PATCH', { bulkDelete: true, ids: doneIds });
+    if (r.error) { toast.error('Failed: ' + r.error); return; }
     setSelectedDone(new Set());
-    toast.success('All done tasks cleared');
+    toast.success('All ' + doneIds.length + ' done tasks cleared 🗑');
+    sounds.pop();
     reload();
   }
 
