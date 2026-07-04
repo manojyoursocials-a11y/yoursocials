@@ -250,7 +250,23 @@ export default function Admin() {
 
         {/* ── TASKS ─────────────────────────────── */}
         {tab==='Tasks'&&(
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:10}}>
+              <div style={{fontSize:'.82rem',color:'var(--muted2)'}}>
+                <span style={{color:'var(--green)',fontWeight:700}}>{tasks.filter(t=>t.status==='done').length} done</span> · {tasks.filter(t=>t.status!=='done').length} active · {tasks.length} total
+              </div>
+              {tasks.filter(t=>t.status==='done').length>0&&(
+                <Btn variant="danger" size="sm" onClick={async()=>{
+                  if(!confirm('Permanently delete all '+tasks.filter(t=>t.status==='done').length+' done tasks? This cannot be undone.')) return;
+                  const r=await fetch('/api/admin-clear?type=done-tasks',{method:'DELETE',headers:{'Content-Type':'application/json'}});
+                  const d=await r.json();
+                  if(d.error){toast.error(d.error);return;}
+                  toast.success('All done tasks cleared! 🗑');
+                  fetch('/api/tasks').then(r=>r.json()).then(d=>setTasks(Array.isArray(d)?d:[]));
+                }}>🗑 Clear All Done ({tasks.filter(t=>t.status==='done').length})</Btn>
+              )}
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {tasks.length===0&&<EmptyState emoji="✅" title="No tasks" subtitle="Create tasks." action={<Btn onClick={()=>openCreate('task')}>+ Add Task</Btn>}/>}
             {tasks.map(t=>{
               const overdue=t.deadline&&t.status!=='done'&&new Date(t.deadline)<new Date();
@@ -274,6 +290,7 @@ export default function Admin() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -299,7 +316,23 @@ export default function Admin() {
 
         {/* ── FOLLOW-UPS ─────────────────────────── */}
         {tab==='Follow-ups'&&(
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:10}}>
+              <div style={{fontSize:'.82rem',color:'var(--muted2)'}}>
+                <span style={{color:'var(--green)',fontWeight:700}}>{followups.filter(f=>f.status==='done').length} done</span> · {followups.filter(f=>f.status==='pending').length} pending
+              </div>
+              {followups.filter(f=>f.status==='done').length>0&&(
+                <Btn variant="danger" size="sm" onClick={async()=>{
+                  if(!confirm('Permanently delete all done follow-ups?')) return;
+                  const r=await fetch('/api/admin-clear?type=done-followups',{method:'DELETE',headers:{'Content-Type':'application/json'}});
+                  const d=await r.json();
+                  if(d.error){toast.error(d.error);return;}
+                  toast.success('Done follow-ups cleared! 🗑');
+                  fetch('/api/followups').then(r=>r.json()).then(d=>setFollowups(Array.isArray(d)?d:[]));
+                }}>🗑 Clear Done ({followups.filter(f=>f.status==='done').length})</Btn>
+              )}
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {followups.length===0&&<EmptyState emoji="📩" title="No follow-ups" subtitle="Track client communications." action={<Btn onClick={()=>openCreate('followup')}>+ Add Follow-up</Btn>}/>}
             {followups.map(f=>(
               <div key={f.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10}}>
