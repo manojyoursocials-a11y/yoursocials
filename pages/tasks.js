@@ -1,13 +1,13 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { Btn, Modal, Input, Select, Textarea, Tag, Avatar, Spinner, launchConfetti, toast, sounds, askAI } from '../components/UI';
 
 // ── Mobile detection ───────────────────────────────────
 function useIsMobile() {
-  const [mobile, setMobile] = React.useState(false);
-  React.useEffect(() => {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
     const check = () => setMobile(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
@@ -56,7 +56,7 @@ export default function Tasks() {
   const userId   = session?.user?.id;
   const isAdmin  = session?.user?.role === 'admin';
   const isMobile = useIsMobile();
-  const [mobileCol, setMobileCol] = React.useState('todo'); // active column on mobile
+  const [mobileCol, setMobileCol] = useState('todo'); // active column on mobile
 
   const [tasks,    setTasks]    = useState([]);
   const [members,  setMembers]  = useState([]);
