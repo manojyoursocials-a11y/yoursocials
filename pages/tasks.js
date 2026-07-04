@@ -372,7 +372,7 @@ export default function Tasks() {
               <option value="all">All members</option>
               {members.map(m=><option key={m.id} value={m.id}>{m.name||m.email}</option>)}
             </select>
-            <select value={clientF} onChange={e=>setClientF(e.target.value)} style={selStyle}>
+            <select value={clientF} onChange={e=>setClientF(e.target.value)} style={{...selStyle,flex:isMobile?'1':'none',minWidth:isMobile?0:undefined}}>
               <option value="all">All clients</option>
               {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

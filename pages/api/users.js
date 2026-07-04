@@ -50,3 +50,6 @@ export default async function handler(req, res) {
 
   res.status(405).end();
 }
+
+// This export is for the coin reset endpoint — handled via PATCH with action:'resetCoins'
+// Already handled in the main handler above via the PATCH method

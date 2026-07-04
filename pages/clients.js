@@ -74,9 +74,9 @@ export default function Clients() {
           <Btn onClick={()=>{setEditing(null);setForm(df());setModal(true);}}>+ Add Client</Btn>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:selected?'320px 1fr':'repeat(auto-fill,minmax(260px,1fr))',gap:16}}>
+        <div style={{display:'grid',gridTemplateColumns:selected?'repeat(auto-fit,minmax(260px,1fr))':'repeat(auto-fill,minmax(260px,1fr))',gap:16}}>
           {/* Client cards */}
-          <div style={selected?{display:'flex',flexDirection:'column',gap:12}:{display:'contents'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
             {clients.length===0
               ?<EmptyState emoji="🏢" title="No clients yet" action={<Btn onClick={()=>{setEditing(null);setForm(df());setModal(true);}}>+ Add Client</Btn>}/>
               :clients.map(c=>{

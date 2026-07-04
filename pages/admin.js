@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Card, Btn, Modal, Input, Select, Textarea, Avatar, Spinner, EmptyState, toast, sounds, api, MEMBER_COLORS } from '../components/UI';
 
-const TABS = ['Users','Clients','Tasks','Rewards','Follow-ups'];
+const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups'];
 
 export default function Admin() {
   const { data: session, status } = useSession();
@@ -28,6 +28,7 @@ export default function Admin() {
   const [editing,    setEditing]    = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [form,       setForm]       = useState({});
+  const [coinResetUser, setCoinResetUser] = useState(null); // user to reset, or 'all'
 
   useEffect(() => {
     if (status==='authenticated' && session?.user?.role==='admin') fetchAll();
@@ -431,6 +432,30 @@ export default function Admin() {
           </>
         )}
       </Modal>
+      {/* Coin Reset Confirm Modal */}
+      <Modal open={!!coinResetUser} onClose={()=>setCoinResetUser(null)} title="Reset Coins" width={380}>
+        {coinResetUser&&<>
+          <div style={{textAlign:'center',padding:'12px 0 20px'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:10}}>🪙</div>
+            {coinResetUser==='all'
+              ?<><div style={{fontWeight:700,fontSize:'1rem',marginBottom:6}}>Reset ALL team coins</div><div style={{fontSize:'.82rem',color:'var(--muted2)',lineHeight:1.6}}>Every team member's coin balance will be set to 0. This cannot be undone.</div></>
+              :<><div style={{fontWeight:700,fontSize:'1rem',marginBottom:6}}>{coinResetUser.name}</div><div style={{fontSize:'.82rem',color:'var(--muted2)'}}>Current balance: 🪙 {(coinResetUser.coins||0).toLocaleString()}</div><div style={{fontSize:'.78rem',color:'var(--muted)',marginTop:6}}>This will reset their coins to 0.</div></>
+            }
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <Btn variant="ghost" onClick={()=>setCoinResetUser(null)} style={{flex:1}}>Cancel</Btn>
+            <Btn variant="danger" onClick={async()=>{
+              const id = coinResetUser==='all'?'all':coinResetUser.id;
+              const r = await api('/api/users','PATCH',{id,action:'resetCoins'});
+              if(r.error){toast.error(r.error);return;}
+              toast.success(coinResetUser==='all'?'All coins reset to 0!':'Coins reset for '+coinResetUser.name,'🔄');
+              setCoinResetUser(null);
+              api('/api/members').then(d=>setUsers(Array.isArray(d)?d:[]));
+            }} style={{flex:1}}>Yes, Reset</Btn>
+          </div>
+        </>}
+      </Modal>
+
     </Layout>
   );
 }
