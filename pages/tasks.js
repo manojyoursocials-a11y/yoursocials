@@ -1,6 +1,6 @@
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { Btn, Modal, Input, Select, Textarea, Tag, Avatar, Spinner, launchConfetti, toast, sounds, askAI } from '../components/UI';
 
@@ -11,13 +11,29 @@ const COLS = [
   { id:'done',       label:'Done',         emoji:'✅', color:'#00E5A0' },
 ];
 const PRI = { P1:'🔴 Critical', P2:'🟠 High', P3:'🟡 Medium', P4:'🟢 Low' };
-
-const blank = () => ({ title:'', description:'', link:'', priority:'P3', owner_id:'', client_id:'', deadline:'', post_date:'', estimated_hours:'' });
+const blank = () => ({ title:'', description:'', priority:'P3', owner_id:'', client_id:'', deadline:'', post_date:'', estimated_hours:'' });
 const toUrl = s => s && !s.startsWith('http') ? 'https://'+s : s;
 
-async function req(url, method='GET', body) {
+async function fetchJ(url, method='GET', body) {
   const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined });
   try { return await r.json(); } catch { return { error: 'Network error' }; }
+}
+
+// ── Link label extractor ─────────────────────────────────────
+function getLinkLabel(url) {
+  try {
+    const u = new URL(url);
+    const h = u.hostname.replace('www.','');
+    if (h.includes('drive.google')) return '📁 Google Drive';
+    if (h.includes('docs.google'))  return '📄 Google Doc';
+    if (h.includes('figma'))        return '🎨 Figma';
+    if (h.includes('notion'))       return '📝 Notion';
+    if (h.includes('slack'))        return '💬 Slack';
+    if (h.includes('youtube'))      return '▶️ YouTube';
+    if (h.includes('instagram'))    return '📸 Instagram';
+    if (h.includes('dropbox'))      return '📦 Dropbox';
+    return '🔗 ' + h;
+  } catch { return '🔗 Link'; }
 }
 
 export default function Tasks() {
@@ -25,60 +41,105 @@ export default function Tasks() {
   const router = useRouter();
   useEffect(() => { if (status==='unauthenticated') router.replace('/login'); }, [status]);
 
-  const userId  = session?.user?.id;
-  const isAdmin = session?.user?.role === 'admin';
+  const userId   = session?.user?.id;
+  const isAdmin  = session?.user?.role === 'admin';
 
   const [tasks,    setTasks]    = useState([]);
   const [members,  setMembers]  = useState([]);
   const [clients,  setClients]  = useState([]);
-  const [today,    setToday]    = useState([]);   // today's tasks panel
   const [loading,  setLoading]  = useState(true);
   const [modal,    setModal]    = useState(false);
   const [editing,  setEditing]  = useState(null);
   const [detail,   setDetail]   = useState(null);
   const [form,     setForm]     = useState(blank());
+  const [links,    setLinks]    = useState([]); // array of URL strings
+  const [newLink,  setNewLink]  = useState('');
   const [checks,   setChecks]   = useState([]);
   const [aiLoad,   setAiLoad]   = useState(false);
   const [aiSugg,   setAiSugg]   = useState('');
-  const [filter,   setFilter]   = useState('all');      // member filter
-  const [clientF,  setClientF]  = useState('all');      // client filter
-  const [statusF,  setStatusF]  = useState('all');      // status filter
+  const [filter,   setFilter]   = useState('all');
+  const [clientF,  setClientF]  = useState('all');
+  const [statusF,  setStatusF]  = useState('all');
   const [saving,   setSaving]   = useState(false);
   const [moving,   setMoving]   = useState('');
-  const [showToday,setShowToday]= useState(true);
+
+  // ── TODAY NOTES scratchpad ──────────────────────────────
+  const [notes,      setNotes]      = useState([]);
+  const [noteInput,  setNoteInput]  = useState('');
+  const [showScratch,setShowScratch]= useState(true);
+  const [editNoteId, setEditNoteId] = useState(null);
+  const [editNoteVal,setEditNoteVal]= useState('');
+  const noteRef = useRef(null);
 
   const reload = useCallback(async () => {
-    const [t, m, c, tod] = await Promise.all([
-      req('/api/tasks'),
-      req('/api/members'),
-      req('/api/clients'),
-      req('/api/tasks?today=1'),
-    ]);
+    const [t, m, c] = await Promise.all([fetchJ('/api/tasks'), fetchJ('/api/members'), fetchJ('/api/clients')]);
     setTasks(Array.isArray(t) ? t : []);
     setMembers(Array.isArray(m) ? m : []);
     setClients(Array.isArray(c) ? c : []);
-    setToday(Array.isArray(tod) ? tod : []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (status==='authenticated') reload(); }, [status, reload]);
+  const reloadNotes = useCallback(async () => {
+    const n = await fetchJ('/api/today-notes');
+    setNotes(Array.isArray(n) ? n : []);
+  }, []);
 
-  // Determine if current user can edit a task
+  useEffect(() => {
+    if (status==='authenticated') { reload(); reloadNotes(); }
+  }, [status, reload, reloadNotes]);
+
+  // ── Note helpers ────────────────────────────────────────
+  async function addNote() {
+    if (!noteInput.trim()) return;
+    await fetchJ('/api/today-notes','POST',{ content: noteInput.trim() });
+    setNoteInput(''); reloadNotes();
+  }
+  async function toggleNote(note) {
+    await fetchJ('/api/today-notes','PATCH',{ id: note.id, done: !note.done });
+    reloadNotes();
+  }
+  async function saveNoteEdit(id) {
+    if (!editNoteVal.trim()) return;
+    await fetchJ('/api/today-notes','PATCH',{ id, content: editNoteVal.trim() });
+    setEditNoteId(null); reloadNotes();
+  }
+  async function deleteNote(id) {
+    await fetchJ('/api/today-notes?id='+id,'DELETE');
+    reloadNotes();
+  }
+  async function clearDone() {
+    await fetchJ('/api/today-notes?clearDone=1','DELETE');
+    reloadNotes();
+  }
+
+  // ── Task permission ─────────────────────────────────────
   function canEdit(task) {
     if (!task) return false;
     if (isAdmin) return true;
     return task.created_by === userId || task.owner_id === userId;
   }
 
-  function openCreate() { setEditing(null); setForm(blank()); setChecks([]); setModal(true); }
+  // ── Link helpers ────────────────────────────────────────
+  function addLink() {
+    const url = newLink.trim();
+    if (!url) return;
+    const full = toUrl(url);
+    if (links.includes(full)) { toast.error('Link already added'); return; }
+    setLinks(prev => [...prev, full]);
+    setNewLink('');
+  }
+  function removeLink(idx) { setLinks(prev => prev.filter((_,i) => i !== idx)); }
 
+  // ── Modal openers ───────────────────────────────────────
+  function openCreate() {
+    setEditing(null); setForm(blank()); setLinks([]); setNewLink(''); setChecks([]); setModal(true);
+  }
   function openEdit(task) {
     if (!canEdit(task)) { toast.error('Only the assigner or assignee can edit this task'); return; }
     setEditing(task);
     setForm({
       title:           task.title || '',
       description:     task.description || '',
-      link:            task.link || '',
       priority:        task.priority || 'P3',
       owner_id:        task.owner_id || '',
       client_id:       task.client_id || '',
@@ -86,7 +147,9 @@ export default function Tasks() {
       post_date:       task.post_date ? String(task.post_date).slice(0,10) : '',
       estimated_hours: task.estimated_hours || '',
     });
-    try { setChecks(JSON.parse(task.ai_checklist||'[]')); } catch { setChecks([]); }
+    try { setLinks(JSON.parse(task.links || '[]')); } catch { setLinks([]); }
+    try { setChecks(JSON.parse(task.ai_checklist || '[]')); } catch { setChecks([]); }
+    setNewLink('');
     setDetail(null);
     setModal(true);
   }
@@ -95,10 +158,10 @@ export default function Tasks() {
     if (!form.title.trim()) { toast.error('Title required'); return; }
     setSaving(true);
     const payload = {
+      ...form,
       title:           form.title.trim(),
       description:     form.description.trim(),
-      link:            form.link.trim() ? toUrl(form.link.trim()) : null,
-      priority:        form.priority || 'P3',
+      links:           JSON.stringify(links),
       owner_id:        form.owner_id || null,
       client_id:       form.client_id || null,
       deadline:        form.deadline || null,
@@ -106,35 +169,33 @@ export default function Tasks() {
       estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
       ai_checklist:    JSON.stringify(checks),
     };
-    let res;
-    if (editing) {
-      res = await req('/api/tasks','PATCH',{ id: editing.id, ...payload });
-    } else {
-      res = await req('/api/tasks','POST', payload);
-    }
+    const res = editing
+      ? await fetchJ('/api/tasks','PATCH',{ id: editing.id, ...payload })
+      : await fetchJ('/api/tasks','POST', payload);
     setSaving(false);
     if (res.error) { toast.error(res.error); return; }
-    toast.success(editing ? 'Task saved!' : 'Task created! +10 🪙');
+    toast.success(editing ? 'Task saved! ✅' : 'Task created! +10 🪙');
     sounds.pop();
-    setModal(false); setEditing(null); setForm(blank()); setChecks([]);
+    setModal(false); setEditing(null); setForm(blank()); setLinks([]); setNewLink(''); setChecks([]);
     reload();
   }
 
   async function moveTask(taskId, newStatus) {
     if (moving) return;
     setMoving(taskId + newStatus);
-    const r = await req('/api/tasks','PATCH',{ id: taskId, status: newStatus });
+    const r = await fetchJ('/api/tasks','PATCH',{ id: taskId, status: newStatus });
     setMoving('');
-    if (r.error) { toast.error('Move failed: ' + r.error); reload(); return; }
-    setDetail(prev => prev?.id === taskId ? {...prev, status: newStatus} : prev);
+    if (r.error) { toast.error('Move failed: '+r.error); reload(); return; }
+    setDetail(prev => prev?.id===taskId ? {...prev, status:newStatus} : prev);
     setTasks(prev => prev.map(t => t.id===taskId ? {...t, status:newStatus} : t));
-    if (newStatus==='done') { launchConfetti(); sounds.confetti(); toast.success('Done! +50 🪙 🎉'); }
-    else { sounds.pop(); toast.info('Moved → ' + COLS.find(c=>c.id===newStatus)?.label); }
+    if (newStatus==='done') { launchConfetti(); sounds.confetti(); toast.success('Task done! +30 🪙 🎉'); }
+    else if (newStatus==='review') { sounds.pop(); toast.success('Under Review! +30 🪙 (Designers)'); }
+    else { sounds.pop(); toast.info('Moved → '+COLS.find(c=>c.id===newStatus)?.label); }
     reload();
   }
 
   async function deleteTask(id) {
-    await req('/api/tasks?id='+id,'DELETE');
+    await fetchJ('/api/tasks?id='+id,'DELETE');
     setDetail(null); toast.info('Task deleted'); reload();
   }
 
@@ -148,17 +209,20 @@ export default function Tasks() {
 
   async function getAiHelp(task) {
     setAiSugg('loading');
-    const r = await askAI('3 practical suggestions for: "'+task.title+'" (Priority:'+task.priority+', Assignee:'+(task.owner_name||'?')+', Client:'+(task.client_name||'Internal')+')');
+    const r = await askAI('3 practical suggestions for task: "'+task.title+'" (Priority:'+task.priority+', Assignee:'+(task.owner_name||'?')+', Client:'+(task.client_name||'Internal')+')');
     setAiSugg(r);
   }
 
-  // Apply filters
   let filtered = [...tasks];
-  if (filter !== 'all')   filtered = filtered.filter(t => t.owner_id === filter);
-  if (clientF !== 'all')  filtered = filtered.filter(t => t.client_id === clientF);
-  if (statusF !== 'all')  filtered = filtered.filter(t => t.status === statusF);
+  if (filter  !== 'all') filtered = filtered.filter(t => t.owner_id  === filter);
+  if (clientF !== 'all') filtered = filtered.filter(t => t.client_id === clientF);
+  if (statusF !== 'all') filtered = filtered.filter(t => t.status    === statusF);
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const doneNotes = notes.filter(n => n.done);
+
+  const selStyle = { background:'#1C1C28', border:'1px solid rgba(255,255,255,.13)', borderRadius:10, padding:'7px 11px', fontSize:'.78rem', color:'#F0EFFF', fontFamily:'Inter,sans-serif', cursor:'pointer' };
+  const tagSt    = { background:'#1C1C28', color:'#9090AA', fontSize:'.68rem', fontWeight:600, padding:'2px 8px', borderRadius:6 };
 
   if (loading) return (
     <Layout>
@@ -170,55 +234,98 @@ export default function Tasks() {
 
   return (
     <Layout badges={{ tasks: tasks.filter(t=>t.status==='todo').length }}>
-      <div style={{display:'flex',height:'calc(100vh - 110px)',gap:16}}>
+      <div style={{display:'flex',height:'calc(100vh - 110px)',gap:14}}>
 
-        {/* ── TODAY'S TASKS PANEL (left) ─────────────── */}
-        {showToday && (
-          <div style={{width:260,minWidth:260,background:'#16161F',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,display:'flex',flexDirection:'column',overflow:'hidden',flexShrink:0}}>
-            <div style={{padding:'13px 14px 10px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        {/* ── TODAY SCRATCHPAD (left panel) ─────────────── */}
+        {showScratch && (
+          <div style={{width:250,minWidth:250,background:'#16161F',border:'1px solid rgba(255,255,255,.08)',borderRadius:16,display:'flex',flexDirection:'column',overflow:'hidden',flexShrink:0}}>
+            <div style={{padding:'12px 14px 10px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <div>
-                <div style={{fontWeight:800,fontSize:'.85rem',color:'#F0EFFF'}}>📅 Today</div>
-                <div style={{fontSize:'.65rem',color:'#6B6B8A',marginTop:2}}>{today.length} tasks due/posting</div>
+                <div style={{fontWeight:800,fontSize:'.85rem',color:'#F0EFFF'}}>📝 My Notes</div>
+                <div style={{fontSize:'.64rem',color:'#6B6B8A',marginTop:1}}>{notes.filter(n=>!n.done).length} pending · {todayStr}</div>
               </div>
-              <button onClick={()=>setShowToday(false)} style={{background:'none',border:'none',color:'#6B6B8A',cursor:'pointer',fontSize:'.9rem'}}>✕</button>
+              <button onClick={()=>setShowScratch(false)} style={{background:'none',border:'none',color:'#6B6B8A',cursor:'pointer',fontSize:'.85rem',padding:2}}>✕</button>
             </div>
-            <div style={{flex:1,overflowY:'auto',padding:8}}>
-              {today.length===0
-                ? <div style={{textAlign:'center',padding:'24px 8px',color:'#6B6B8A',fontSize:'.78rem'}}>🎉 Nothing due today!</div>
-                : today.map(t => {
-                  const isPost = t.post_date && String(t.post_date).slice(0,10) === todayStr;
-                  const isDead = t.deadline && String(t.deadline).slice(0,10) === todayStr;
-                  return (
-                    <div key={t.id} onClick={() => { setDetail(t); setAiSugg(''); }}
-                      style={{padding:'9px 10px',borderRadius:9,marginBottom:6,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',cursor:'pointer',transition:'border-color .15s'}}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor='#7C5CFC'}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor='rgba(255,255,255,.07)'}>
-                      <div style={{fontSize:'.78rem',fontWeight:600,color:'#F0EFFF',marginBottom:4,lineHeight:1.3}}>{t.title}</div>
-                      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                        <Tag text={t.priority}/>
-                        {isPost && <span style={{fontSize:'.63rem',background:'rgba(124,92,252,.15)',color:'#9D7FFF',padding:'1px 6px',borderRadius:5,fontWeight:600}}>📤 Post</span>}
-                        {isDead && <span style={{fontSize:'.63rem',background:'rgba(255,77,109,.15)',color:'#FF4D6D',padding:'1px 6px',borderRadius:5,fontWeight:600}}>⏰ Due</span>}
-                      </div>
-                      {t.owner_name && <div style={{fontSize:'.67rem',color:'#6B6B8A',marginTop:4}}>👤 {t.owner_name}</div>}
-                      {t.client_name && <div style={{fontSize:'.67rem',color:'#6B6B8A'}}>🏢 {t.client_name}</div>}
+
+            {/* Input row */}
+            <div style={{padding:'10px 10px 8px',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+              <div style={{display:'flex',gap:6}}>
+                <input
+                  ref={noteRef}
+                  value={noteInput}
+                  onChange={e=>setNoteInput(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addNote();} }}
+                  placeholder="Type a task, press Enter…"
+                  style={{flex:1,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.1)',borderRadius:8,padding:'7px 10px',fontSize:'.78rem',color:'#F0EFFF',fontFamily:'Inter,sans-serif',outline:'none'}}
+                  onFocus={e=>e.target.style.borderColor='#7C5CFC'}
+                  onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.1)'}
+                />
+                <button onClick={addNote} style={{background:'#7C5CFC',border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',color:'#fff',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
+              </div>
+            </div>
+
+            {/* Notes list */}
+            <div style={{flex:1,overflowY:'auto',padding:'8px 10px'}}>
+              {notes.length===0 && <div style={{textAlign:'center',padding:'20px 8px',color:'#6B6B8A',fontSize:'.76rem',lineHeight:1.5}}>Type above to add your first note</div>}
+
+              {/* Pending */}
+              {notes.filter(n=>!n.done).map(note=>(
+                <div key={note.id} style={{display:'flex',alignItems:'flex-start',gap:7,padding:'6px 4px',borderRadius:8,marginBottom:4,transition:'background .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <input type="checkbox" checked={false} onChange={()=>toggleNote(note)} style={{marginTop:3,accentColor:'#7C5CFC',cursor:'pointer',flexShrink:0,width:14,height:14}}/>
+                  {editNoteId===note.id
+                    ? <input
+                        autoFocus
+                        value={editNoteVal}
+                        onChange={e=>setEditNoteVal(e.target.value)}
+                        onBlur={()=>saveNoteEdit(note.id)}
+                        onKeyDown={e=>{ if(e.key==='Enter') saveNoteEdit(note.id); if(e.key==='Escape'){setEditNoteId(null);} }}
+                        style={{flex:1,background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.3)',borderRadius:6,padding:'3px 7px',fontSize:'.78rem',color:'#F0EFFF',fontFamily:'Inter,sans-serif',outline:'none'}}
+                      />
+                    : <span
+                        style={{flex:1,fontSize:'.78rem',color:'#D0CFFF',lineHeight:1.45,cursor:'text',wordBreak:'break-word'}}
+                        onDoubleClick={()=>{ setEditNoteId(note.id); setEditNoteVal(note.content); }}>
+                        {note.content}
+                      </span>
+                  }
+                  <button onClick={()=>deleteNote(note.id)} style={{background:'none',border:'none',color:'#6B6B8A',cursor:'pointer',fontSize:'.75rem',padding:'2px 4px',flexShrink:0,opacity:.5,transition:'opacity .15s'}}
+                    onMouseEnter={e=>e.currentTarget.style.opacity='1'}
+                    onMouseLeave={e=>e.currentTarget.style.opacity='.5'}>✕</button>
+                </div>
+              ))}
+
+              {/* Done notes */}
+              {doneNotes.length>0&&(
+                <>
+                  <div style={{fontSize:'.62rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'#6B6B8A',margin:'10px 4px 6px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <span>Done ({doneNotes.length})</span>
+                    <button onClick={clearDone} style={{background:'none',border:'none',color:'#6B6B8A',cursor:'pointer',fontSize:'.62rem',fontFamily:'Inter,sans-serif',textDecoration:'underline'}}>Clear</button>
+                  </div>
+                  {doneNotes.map(note=>(
+                    <div key={note.id} style={{display:'flex',alignItems:'center',gap:7,padding:'5px 4px',opacity:.45}}>
+                      <input type="checkbox" checked={true} onChange={()=>toggleNote(note)} style={{accentColor:'#7C5CFC',cursor:'pointer',flexShrink:0,width:14,height:14}}/>
+                      <span style={{flex:1,fontSize:'.76rem',color:'#6B6B8A',textDecoration:'line-through',lineHeight:1.4}}>{note.content}</span>
                     </div>
-                  );
-                })
-              }
+                  ))}
+                </>
+              )}
+            </div>
+
+            <div style={{padding:'8px 10px',borderTop:'1px solid rgba(255,255,255,.05)',fontSize:'.63rem',color:'#6B6B8A',textAlign:'center'}}>
+              Double-click to edit · Enter to add
             </div>
           </div>
         )}
 
-        {/* ── MAIN BOARD ─────────────────────────────── */}
-        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        {/* ── MAIN BOARD ─────────────────────────────────── */}
+        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
           {/* Toolbar */}
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
-            {!showToday && (
-              <button onClick={()=>setShowToday(true)} style={{padding:'6px 12px',background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,color:'#9D7FFF',fontSize:'.76rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                📅 Today
-              </button>
+            {!showScratch&&(
+              <button onClick={()=>setShowScratch(true)} title="My Notes" style={{padding:'6px 12px',background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,color:'#9D7FFF',fontSize:'.76rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>📝</button>
             )}
-            <select value={filter} onChange={e=>setFilter(e.target.value)} style={selStyle}>
+            <select value={filter}  onChange={e=>setFilter(e.target.value)}  style={selStyle}>
               <option value="all">All members</option>
               {members.map(m=><option key={m.id} value={m.id}>{m.name||m.email}</option>)}
             </select>
@@ -230,15 +337,13 @@ export default function Tasks() {
               <option value="all">All statuses</option>
               {COLS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
-            <button onClick={openCreate} style={{marginLeft:'auto',padding:'8px 18px',background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>
-              + New Task
-            </button>
+            <button onClick={openCreate} style={{marginLeft:'auto',padding:'8px 18px',background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>+ New Task</button>
           </div>
 
-          {/* Kanban columns */}
+          {/* Kanban */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,flex:1,overflow:'hidden'}}>
-            {COLS.map(col => {
-              const colTasks = filtered.filter(t => t.status === col.id);
+            {COLS.map(col=>{
+              const colTasks=filtered.filter(t=>t.status===col.id);
               return (
                 <div key={col.id} style={{background:'#16161F',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'12px 12px 8px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
@@ -246,30 +351,52 @@ export default function Tasks() {
                     <span style={{background:'#1C1C28',color:'#9090AA',fontSize:'.62rem',fontWeight:700,padding:'2px 7px',borderRadius:20}}>{colTasks.length}</span>
                   </div>
                   <div style={{flex:1,overflowY:'auto',padding:7,display:'flex',flexDirection:'column',gap:7}}>
-                    {colTasks.length===0 && <div style={{color:'#6B6B8A',fontSize:'.72rem',textAlign:'center',padding:'16px 0'}}>No tasks</div>}
-                    {colTasks.map(t => <TaskCard key={t.id} task={t} onClick={()=>{setDetail(t);setAiSugg('');}}/>)}
+                    {colTasks.length===0&&<div style={{color:'#6B6B8A',fontSize:'.72rem',textAlign:'center',padding:'16px 0'}}>No tasks</div>}
+                    {colTasks.map(t=><TaskCard key={t.id} task={t} onClick={()=>{setDetail(t);setAiSugg('');}}/>)}
                   </div>
                   <button onClick={openCreate} style={{margin:7,padding:7,borderRadius:8,border:'1px dashed rgba(255,255,255,.1)',background:'transparent',color:'#6B6B8A',fontSize:'.73rem',cursor:'pointer',fontFamily:'Inter,sans-serif'}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor='#7C5CFC';e.currentTarget.style.color='#9D7FFF';}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#6B6B8A';}}>
-                    + Add task
-                  </button>
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#6B6B8A';}}>+ Add task</button>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ── CREATE / EDIT MODAL ─────────────────────── */}
-        <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);}} title={editing?'✏️ Edit Task':'+ New Task'} width={600}>
+        {/* ── CREATE / EDIT MODAL ─────────────────────────── */}
+        <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);}} title={editing?'✏️ Edit Task':'+ New Task'} width={620}>
           <Input label="Title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Instagram Reels — June Recap"/>
           <Textarea label="Description" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="What needs to be done…"/>
-          <Input label="Link (any URL)" value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://drive.google.com/..."/>
+
+          {/* Multiple links section */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:'.73rem',fontWeight:600,color:'#9090AA',marginBottom:8}}>🔗 Links (add multiple)</div>
+            {links.map((url,idx)=>(
+              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'rgba(124,92,252,.08)',border:'1px solid rgba(124,92,252,.2)',borderRadius:8,marginBottom:6}}>
+                <span style={{fontSize:'.75rem',color:'#9D7FFF',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getLinkLabel(url)}</span>
+                <a href={url} target="_blank" rel="noopener noreferrer" style={{fontSize:'.7rem',color:'#9D7FFF',textDecoration:'none'}} onClick={e=>e.stopPropagation()}>↗</a>
+                <button onClick={()=>removeLink(idx)} style={{background:'none',border:'none',color:'#FF4D6D',cursor:'pointer',fontSize:'.8rem',padding:'0 2px'}}>✕</button>
+              </div>
+            ))}
+            <div style={{display:'flex',gap:8}}>
+              <input
+                value={newLink}
+                onChange={e=>setNewLink(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&(e.preventDefault(),addLink())}
+                placeholder="Paste URL and press Enter or click Add"
+                style={{flex:1,background:'#1C1C28',border:'1px solid rgba(255,255,255,.13)',borderRadius:9,padding:'8px 12px',fontSize:'.8rem',color:'#F0EFFF',fontFamily:'Inter,sans-serif',outline:'none'}}
+                onFocus={e=>e.target.style.borderColor='#7C5CFC'}
+                onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'}
+              />
+              <button onClick={addLink} style={{padding:'8px 14px',background:'rgba(124,92,252,.15)',border:'1px solid rgba(124,92,252,.3)',borderRadius:9,color:'#9D7FFF',fontSize:'.8rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>+ Add</button>
+            </div>
+          </div>
+
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
             <Select label="Priority" value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))}>
               {Object.entries(PRI).map(([k,v])=><option key={k} value={k}>{v}</option>)}
             </Select>
-            <Select label="Assign To (Assignee)" value={form.owner_id} onChange={e=>setForm(f=>({...f,owner_id:e.target.value}))}>
+            <Select label="Assignee" value={form.owner_id} onChange={e=>setForm(f=>({...f,owner_id:e.target.value}))}>
               <option value="">Me</option>
               {members.map(m=><option key={m.id} value={m.id}>{m.name||m.email}</option>)}
             </Select>
@@ -300,52 +427,63 @@ export default function Tasks() {
           </div>
         </Modal>
 
-        {/* ── DETAIL MODAL ────────────────────────────── */}
+        {/* ── DETAIL MODAL ────────────────────────────────── */}
         <Modal open={!!detail} onClose={()=>{setDetail(null);setAiSugg('');}} title={detail?.title||''} width={580}>
           {detail&&(()=>{
             const cur = detail.status;
             const editable = canEdit(detail);
+            let taskLinks = [];
+            try { taskLinks = JSON.parse(detail.links||'[]'); } catch {}
             return (
               <>
-                {/* Tags row */}
+                {/* Tags */}
                 <div style={{display:'flex',gap:7,flexWrap:'wrap',marginBottom:14}}>
-                  <Tag text={detail.priority}/>
-                  <Tag text={cur}/>
-                  {detail.client_name&&<span style={tagStyle}>🏢 {detail.client_name}</span>}
-                  {detail.post_date&&<span style={{...tagStyle,background:'rgba(124,92,252,.12)',color:'#9D7FFF'}}>📤 Post: {String(detail.post_date).slice(0,10)}</span>}
-                  {detail.deadline&&<span style={{...tagStyle,background:'rgba(255,77,109,.1)',color:'#FF4D6D'}}>⏰ Due: {String(detail.deadline).slice(0,10)}</span>}
-                  {detail.estimated_hours&&<span style={tagStyle}>⏱ {detail.estimated_hours}h</span>}
+                  <Tag text={detail.priority}/><Tag text={cur}/>
+                  {detail.client_name&&<span style={tagSt}>🏢 {detail.client_name}</span>}
+                  {detail.post_date&&<span style={{...tagSt,background:'rgba(124,92,252,.12)',color:'#9D7FFF'}}>📤 {String(detail.post_date).slice(0,10)}</span>}
+                  {detail.deadline&&<span style={{...tagSt,background:'rgba(255,77,109,.1)',color:'#FF4D6D'}}>⏰ {String(detail.deadline).slice(0,10)}</span>}
+                  {detail.estimated_hours&&<span style={tagSt}>⏱ {detail.estimated_hours}h</span>}
                 </div>
 
-                {/* Assigner + Assignee — Feature #9 */}
+                {/* Assigner + Assignee */}
                 <div style={{display:'flex',gap:16,marginBottom:14,padding:'10px 14px',background:'rgba(255,255,255,.03)',borderRadius:10,border:'1px solid rgba(255,255,255,.07)'}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:'.65rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4}}>Assigner</div>
-                    <div style={{display:'flex',alignItems:'center',gap:7}}>
-                      <Avatar name={detail.created_by_name||'?'} size={26} color="#FF5FA0"/>
-                      <span style={{fontSize:'.8rem',fontWeight:600,color:'#F0EFFF'}}>{detail.created_by_name||'Unknown'}</span>
-                    </div>
+                    <div style={{fontSize:'.63rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5}}>Assigner</div>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.created_by_name||'?'} size={26} color="#FF5FA0"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.created_by_name||'Unknown'}</span></div>
                   </div>
                   <div style={{width:1,background:'rgba(255,255,255,.08)'}}/>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:'.65rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4}}>Assignee</div>
-                    <div style={{display:'flex',alignItems:'center',gap:7}}>
-                      <Avatar name={detail.owner_name||'?'} size={26} color="#7C5CFC"/>
-                      <span style={{fontSize:'.8rem',fontWeight:600,color:'#F0EFFF'}}>{detail.owner_name||'Unassigned'}</span>
-                    </div>
+                    <div style={{fontSize:'.63rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5}}>Assignee</div>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.owner_name||'?'} size={26} color="#7C5CFC"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.owner_name||'Unassigned'}</span></div>
                   </div>
                 </div>
 
                 {detail.description&&<p style={{fontSize:'.83rem',color:'#9090AA',lineHeight:1.6,marginBottom:14}}>{detail.description}</p>}
-                {detail.link&&<div style={{marginBottom:14}}><a href={toUrl(detail.link)} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.3)',borderRadius:8,fontSize:'.82rem',color:'#9D7FFF',textDecoration:'none',fontWeight:600}}>🔗 Open Link ↗</a></div>}
 
-                {/* Move To — Feature #2: reassign resets to todo */}
+                {/* Multiple links */}
+                {taskLinks.length>0&&(
+                  <div style={{marginBottom:14}}>
+                    <div style={{fontSize:'.68rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Links</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {taskLinks.map((url,i)=>(
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                          style={{display:'inline-flex',alignItems:'center',gap:8,padding:'8px 12px',background:'rgba(124,92,252,.1)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,fontSize:'.82rem',color:'#9D7FFF',textDecoration:'none',fontWeight:600,transition:'background .15s'}}
+                          onMouseEnter={e=>e.currentTarget.style.background='rgba(124,92,252,.2)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='rgba(124,92,252,.1)'}>
+                          {getLinkLabel(url)} <span style={{fontSize:'.7rem',opacity:.7}}>↗</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Move To */}
                 <div style={{marginBottom:14,padding:14,background:'rgba(255,255,255,.02)',borderRadius:12,border:'1px solid rgba(255,255,255,.07)'}}>
                   <div style={{fontSize:'.68rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:10}}>Move to</div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                    {COLS.map(col => {
-                      const isCur = col.id===cur;
-                      const isLoading = moving === detail.id+col.id;
+                    {COLS.map(col=>{
+                      const isCur=col.id===cur;
+                      const isLoading=moving===detail.id+col.id;
                       return (
                         <button key={col.id} disabled={isCur||!!moving}
                           onClick={()=>moveTask(detail.id,col.id)}
@@ -360,11 +498,11 @@ export default function Tasks() {
                   </div>
                 </div>
 
-                {/* Action buttons — edit only for assigner/assignee */}
+                {/* Action buttons */}
                 <div style={{display:'flex',gap:8,marginBottom:14}}>
                   {editable
-                    ? <Btn variant="ghost" size="sm" onClick={()=>openEdit(detail)} style={{flex:1}}>✏️ Edit Task</Btn>
-                    : <div style={{flex:1,padding:'5px 12px',borderRadius:10,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',fontSize:'.75rem',color:'#6B6B8A',display:'flex',alignItems:'center',justifyContent:'center'}}>🔒 View only</div>
+                    ?<Btn variant="ghost" size="sm" onClick={()=>openEdit(detail)} style={{flex:1}}>✏️ Edit Task</Btn>
+                    :<div style={{flex:1,padding:'5px 12px',borderRadius:10,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',fontSize:'.75rem',color:'#6B6B8A',display:'flex',alignItems:'center',justifyContent:'center'}}>🔒 View only</div>
                   }
                   <Btn variant="ghost" size="sm" onClick={()=>getAiHelp(detail)} style={{flex:1}}>🤖 AI Help</Btn>
                   {(isAdmin||detail.created_by===userId)&&<Btn variant="danger" size="sm" onClick={()=>deleteTask(detail.id)}>🗑</Btn>}
@@ -383,13 +521,12 @@ export default function Tasks() {
   );
 }
 
-const selStyle = { background:'#1C1C28', border:'1px solid rgba(255,255,255,.13)', borderRadius:10, padding:'7px 11px', fontSize:'.78rem', color:'#F0EFFF', fontFamily:'Inter,sans-serif', cursor:'pointer' };
-const tagStyle  = { background:'#1C1C28', color:'#9090AA', fontSize:'.68rem', fontWeight:600, padding:'2px 8px', borderRadius:6 };
-
 function TaskCard({ task, onClick }) {
-  const over = task.deadline && task.status!=='done' && new Date(task.deadline) < new Date();
+  const over = task.deadline && task.status!=='done' && new Date(String(task.deadline).slice(0,10)) < new Date(new Date().toDateString());
   const todayStr = new Date().toISOString().split('T')[0];
   const postToday = task.post_date && String(task.post_date).slice(0,10) === todayStr;
+  let linkCount = 0;
+  try { linkCount = JSON.parse(task.links||'[]').length; } catch {}
   return (
     <div onClick={onClick}
       style={{background:'#1C1C28',border:'1px solid '+(over?'rgba(255,77,109,.35)':'rgba(255,255,255,.07)'),borderRadius:10,padding:11,cursor:'pointer',transition:'all .15s'}}
@@ -399,14 +536,13 @@ function TaskCard({ task, onClick }) {
       <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center',marginBottom:6}}>
         <Tag text={task.priority}/>
         {task.client_name&&<span style={{fontSize:'.63rem',color:'#6B6B8A'}}>{task.client_name}</span>}
-        {task.link&&<span style={{fontSize:'.63rem',color:'#9D7FFF'}}>🔗</span>}
-        {postToday&&<span style={{fontSize:'.63rem',background:'rgba(124,92,252,.15)',color:'#9D7FFF',padding:'1px 5px',borderRadius:4,fontWeight:600}}>📤</span>}
+        {linkCount>0&&<span style={{fontSize:'.63rem',color:'#9D7FFF'}}>🔗 {linkCount}</span>}
+        {postToday&&<span style={{fontSize:'.63rem',background:'rgba(124,92,252,.15)',color:'#9D7FFF',padding:'1px 5px',borderRadius:4,fontWeight:600}}>📤 Today</span>}
       </div>
-      {/* Assigner + Assignee on card — Feature #9 */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-        <div style={{display:'flex',alignItems:'center',gap:4}}>
-          {task.created_by_name&&<div style={{fontSize:'.65rem',color:'#6B6B8A',display:'flex',alignItems:'center',gap:3}}><Avatar name={task.created_by_name} size={16} color="#FF5FA0"/><span title="Assigner">{task.created_by_name.split(' ')[0]}</span></div>}
-          {task.owner_name&&task.owner_name!==task.created_by_name&&<><span style={{color:'#6B6B8A',fontSize:'.6rem'}}>→</span><div style={{fontSize:'.65rem',color:'#9090AA',display:'flex',alignItems:'center',gap:3}}><Avatar name={task.owner_name} size={16} color="#7C5CFC"/><span title="Assignee">{task.owner_name.split(' ')[0]}</span></div></>}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{display:'flex',alignItems:'center',gap:5}}>
+          {task.created_by_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.63rem',color:'#6B6B8A'}} title={'Assigner: '+task.created_by_name}><Avatar name={task.created_by_name} size={16} color="#FF5FA0"/></div>}
+          {task.owner_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.65rem',color:'#9090AA'}} title={'Assignee: '+task.owner_name}><span style={{color:'#6B6B8A',fontSize:'.55rem'}}>→</span><Avatar name={task.owner_name} size={16} color="#7C5CFC"/><span>{task.owner_name.split(' ')[0]}</span></div>}
         </div>
         {task.deadline&&<span style={{fontSize:'.63rem',color:over?'#FF4D6D':'#6B6B8A'}}>📅 {String(task.deadline).slice(0,10)}</span>}
       </div>
