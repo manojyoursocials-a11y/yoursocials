@@ -6,10 +6,9 @@ import { v4 as uuid } from 'uuid';
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
-  const userId  = session.user.id;
-  const userRole = session.user.role;
+  const userId   = session.user.id;
   const jobTitle = (session.user.job_title || '').toLowerCase();
-  const isAdmin  = userRole === 'admin';
+  const isAdmin  = session.user.role === 'admin';
   const db = getDb();
 
   if (req.method === 'GET') {
@@ -35,8 +34,7 @@ export default async function handler(req, res) {
       ai_checklist: typeof ai_checklist === 'string' ? ai_checklist : JSON.stringify(ai_checklist || []),
       created_by: userId,
     });
-    // Task created = 10 coins
-    await db.addCoins(userId, 10);
+    await db.addCoins(userId, 10); // Task created = 10 coins (once, on creation)
     return res.status(201).json(task);
   }
 
@@ -45,27 +43,32 @@ export default async function handler(req, res) {
     const id   = body.id;
     if (!id) return res.status(400).json({ error: 'id required' });
 
-    // STATUS MOVE
-    if (body.status !== undefined && body.title === undefined) {
-      await db.moveTask(id, body.status);
+    // ── BULK DELETE done tasks ──────────────────────────────
+    if (body.bulkDelete && Array.isArray(body.ids)) {
+      await db.deleteTasks(body.ids);
+      return res.json({ ok: true, deleted: body.ids.length });
+    }
 
-      if (body.status === 'done') {
-        // Task done = 30 coins (changed from 50)
+    // ── STATUS MOVE ─────────────────────────────────────────
+    if (body.status !== undefined && body.title === undefined) {
+      const { reviewAwarded, doneAwarded } = await db.moveTask(id, body.status);
+
+      // Done coins — only if this task hasn't been awarded done coins before
+      if (body.status === 'done' && doneAwarded) {
         await db.addCoins(userId, 30);
       }
 
-      if (body.status === 'review') {
-        // Under Review = 30 coins ONLY for Graphic Designer role
+      // Under Review coins — only if task hasn't been awarded review coins before
+      // AND only for Graphic Designer role
+      if (body.status === 'review' && reviewAwarded) {
         const isDesigner = jobTitle.includes('graphic') || jobTitle.includes('designer');
-        if (isDesigner) {
-          await db.addCoins(userId, 30);
-        }
+        if (isDesigner) await db.addCoins(userId, 30);
       }
 
       return res.json({ ok: true });
     }
 
-    // EDIT — only assigner or assignee (or admin)
+    // ── EDIT ────────────────────────────────────────────────
     if (body.title !== undefined) {
       if (!isAdmin) {
         const task = await db.getTaskById(id);

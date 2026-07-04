@@ -24,10 +24,9 @@ export default function Layout({ children, badges={} }) {
 
   return (
     <div style={{ display:'flex', height:'100vh', overflow:'hidden' }}>
-      <aside style={{ width:220, minWidth:220, background:'var(--surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 12px', gap:2, overflow:'hidden auto' }}>
+      <aside style={{ width:200, minWidth:200, background:'var(--surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', padding:'20px 12px', gap:2, overflow:'hidden auto' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 10px 20px', borderBottom:'1px solid var(--border)', marginBottom:8 }}>
-          <div style={{ width:32, height:32, borderRadius:10, background:'var(--grad1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>⚡</div>
-          <span style={{ fontWeight:800, fontSize:'.88rem', background:'var(--grad1)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Your Socials OS</span>
+          <img src="/logo.png" alt="Your Socials" style={{ height:36, width:'auto', maxWidth:180, objectFit:'contain', filter:'invert(1)' }}/>
         </div>
 
         {NAV.map((item, i) => {

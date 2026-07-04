@@ -62,6 +62,7 @@ export default function Tasks() {
   const [statusF,  setStatusF]  = useState('all');
   const [saving,   setSaving]   = useState(false);
   const [moving,   setMoving]   = useState('');
+  const [selectedDone, setSelectedDone] = useState(new Set()); // ids of done tasks selected for clearing
 
   // ── TODAY NOTES scratchpad ──────────────────────────────
   const [notes,      setNotes]      = useState([]);
@@ -197,6 +198,34 @@ export default function Tasks() {
   async function deleteTask(id) {
     await fetchJ('/api/tasks?id='+id,'DELETE');
     setDetail(null); toast.info('Task deleted'); reload();
+  }
+
+  function toggleDoneSelect(id, e) {
+    e.stopPropagation();
+    setSelectedDone(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function clearSelectedDone() {
+    if (selectedDone.size === 0) return;
+    const ids = Array.from(selectedDone);
+    await fetchJ('/api/tasks', 'PATCH', { id: ids[0], bulkDelete: true, ids });
+    setSelectedDone(new Set());
+    toast.success(ids.length + ' done tasks cleared');
+    reload();
+  }
+
+  async function clearAllDone() {
+    const doneIds = tasks.filter(t => t.status === 'done').map(t => t.id);
+    if (!doneIds.length) { toast.info('No done tasks to clear'); return; }
+    if (!confirm('Clear ALL ' + doneIds.length + ' done tasks? This cannot be undone.')) return;
+    await fetchJ('/api/tasks', 'PATCH', { id: doneIds[0], bulkDelete: true, ids: doneIds });
+    setSelectedDone(new Set());
+    toast.success('All done tasks cleared');
+    reload();
   }
 
   async function genChecklist() {
@@ -521,7 +550,7 @@ export default function Tasks() {
   );
 }
 
-function TaskCard({ task, onClick }) {
+function TaskCard({ task, onClick, dimmed=false, indent=false }) {
   const over = task.deadline && task.status!=='done' && new Date(String(task.deadline).slice(0,10)) < new Date(new Date().toDateString());
   const todayStr = new Date().toISOString().split('T')[0];
   const postToday = task.post_date && String(task.post_date).slice(0,10) === todayStr;
@@ -529,7 +558,7 @@ function TaskCard({ task, onClick }) {
   try { linkCount = JSON.parse(task.links||'[]').length; } catch {}
   return (
     <div onClick={onClick}
-      style={{background:'#1C1C28',border:'1px solid '+(over?'rgba(255,77,109,.35)':'rgba(255,255,255,.07)'),borderRadius:10,padding:11,cursor:'pointer',transition:'all .15s'}}
+      style={{background:'#1C1C28',border:'1px solid '+(over?'rgba(255,77,109,.35)':'rgba(255,255,255,.07)'),borderRadius:10,padding:11,paddingLeft:indent?32:11,cursor:'pointer',transition:'all .15s',opacity:dimmed?.5:1}}
       onMouseEnter={e=>{e.currentTarget.style.borderColor='#7C5CFC';e.currentTarget.style.transform='translateY(-1px)';}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=over?'rgba(255,77,109,.35)':'rgba(255,255,255,.07)';e.currentTarget.style.transform='';}}>
       <div style={{fontSize:'.82rem',fontWeight:600,marginBottom:7,color:'#F0EFFF',lineHeight:1.3}}>{task.title}</div>
