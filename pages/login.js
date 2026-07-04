@@ -40,8 +40,8 @@ export default function Login() {
         )}
 
         <form onSubmit={handleLogin}>
-          <div style={{ fontSize:'.72rem', fontWeight:600, color:'#9090AA', marginBottom:5, letterSpacing:'.04em' }}>Email</div>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@yoursocials.in" required style={iStyle} onFocus={e=>e.target.style.borderColor='#7C5CFC'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'} />
+          <div style={{ fontSize:'.72rem', fontWeight:600, color:'#9090AA', marginBottom:5, letterSpacing:'.04em' }}>Email or Phone</div>
+          <input type="text" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@yoursocials.in or +91 98765 43210" required style={iStyle} onFocus={e=>e.target.style.borderColor='#7C5CFC'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'} />
           <div style={{ fontSize:'.72rem', fontWeight:600, color:'#9090AA', marginBottom:5, letterSpacing:'.04em' }}>Password</div>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" required style={iStyle} onFocus={e=>e.target.style.borderColor='#7C5CFC'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'} />
           <button type="submit" disabled={loading} style={{ width:'100%', padding:'12px', background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)', border:'none', borderRadius:10, fontSize:'.9rem', fontWeight:700, color:'#fff', cursor:loading?'not-allowed':'pointer', marginTop:4, opacity:loading?.7:1, fontFamily:'Inter,sans-serif', transition:'opacity .18s' }}>

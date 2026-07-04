@@ -56,11 +56,11 @@ export default function Admin() {
       if (!editing && !form.password) { toast.error('Password required'); return; }
       if (form.password && form.password.length<6) { toast.error('Password min 6 chars'); return; }
       if (editing) {
-        const res = await api('/api/users','PATCH',{id:editing.id,...form});
+        const res = await api('/api/users','PATCH',{id:editing.id,...form,phone:form.phone||null,image:form.image||null});
         if (res.error) { toast.error(res.error); return; }
         toast.success('User updated');
       } else {
-        const res = await api('/api/users','POST',form);
+        const res = await api('/api/users','POST',{...form,phone:form.phone||null,image:form.image||null});
         if (res.error) { toast.error(res.error); return; }
         toast.success(form.name+' added!','👤'); sounds.success();
       }

@@ -17,6 +17,22 @@ const NAV = [
   { path:'/analytics',   icon:'📊', label:'Analytics' },
 ];
 
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const date = now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
+  const time = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
+  return (
+    <div style={{ textAlign:'right', lineHeight:1.3 }}>
+      <div style={{ fontSize:'.75rem', color:'var(--muted2)', fontWeight:500 }}>{date}</div>
+      <div style={{ fontSize:'.72rem', color:'var(--muted)', fontFamily:'monospace' }}>{time}</div>
+    </div>
+  );
+}
+
 export default function Layout({ children, badges = {} }) {
   const router   = useRouter();
   const { data: session } = useSession();
@@ -133,7 +149,7 @@ export default function Layout({ children, badges = {} }) {
               <span style={{ color:'var(--yellow)', fontWeight:700, fontSize:'.82rem' }}>🪙 {(session.user.coins||0).toLocaleString()}</span>
             )}
             <span style={{ fontSize:'.75rem', color:'var(--muted2)' }}>
-              {new Date().toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })}
+  <LiveClock />
             </span>
           </div>
         </div>

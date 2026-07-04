@@ -35,8 +35,9 @@ export function Textarea({label,...p}){return <div style={{marginBottom:14}}>{la
 const PS={P1:{background:'rgba(255,77,109,.15)',color:'var(--red)'},P2:{background:'rgba(255,140,66,.15)',color:'var(--orange)'},P3:{background:'rgba(255,214,10,.12)',color:'var(--yellow)'},P4:{background:'rgba(0,229,160,.10)',color:'var(--green)'},todo:{background:'rgba(144,144,170,.12)',color:'var(--muted2)'},inprogress:{background:'rgba(0,212,255,.12)',color:'var(--cyan)'},review:{background:'rgba(255,214,10,.12)',color:'var(--yellow)'},done:{background:'rgba(0,229,160,.10)',color:'var(--green)'}};
 export function Tag({text,style}){const s=PS[text]||{};return <span style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',borderRadius:6,fontSize:'.68rem',fontWeight:700,whiteSpace:'nowrap',...s,...style}}>{text}</span>;}
 
-export function Avatar({name='',size=36,color='var(--purple)'}){
+export function Avatar({name='',image,size=36,color='var(--purple)'}){
   const i=(name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  if(image) return <div style={{width:size,height:size,borderRadius:'50%',border:`2px solid ${color}44`,flexShrink:0,overflow:'hidden'}}><img src={image} alt={name} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>;
   return <div style={{width:size,height:size,borderRadius:'50%',background:`${color}33`,border:`2px solid ${color}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.35,fontWeight:800,color,flexShrink:0}}>{i}</div>;
 }
 
