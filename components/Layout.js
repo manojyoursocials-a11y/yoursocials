@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import NotificationBell from './NotificationBell';
 import { useRouter } from 'next/router';
 import { useSession, signOut } from 'next-auth/react';
 import { Avatar, ToastContainer } from './UI';
