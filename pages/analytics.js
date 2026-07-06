@@ -153,7 +153,7 @@ export default function Analytics() {
             {byMember.map((m,i)=>(
               <div key={m.id} style={{marginBottom:16}}>
                 <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:7}}>
-                  <Avatar name={m.name||m.email} size={30} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                  <Avatar name={m.name||m.email} image={m.image} size={30} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
                   <div style={{flex:1}}>
                     <div style={{fontSize:'.83rem',fontWeight:700}}>{m.name||m.email?.split('@')[0]}</div>
                     <div style={{fontSize:'.7rem',color:'var(--muted)' }}>{m.tasks.length} tasks · {m.done} done</div>

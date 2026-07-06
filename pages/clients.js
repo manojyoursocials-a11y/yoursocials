@@ -219,7 +219,7 @@ export default function Clients() {
                                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
                                   <div style={{ display:'flex', gap:5, alignItems:'center' }}>
                                     <Tag text={t.priority}/>
-                                    {t.owner_name && <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:'.7rem', color:'var(--muted2)' }}><Avatar name={t.owner_name} size={18} color="#7C5CFC"/>{t.owner_name.split(' ')[0]}</div>}
+                                    {t.owner_name && <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:'.7rem', color:'var(--muted2)' }}><Avatar name={t.owner_name} image={t.owner_image} size={18} color="#7C5CFC"/>{t.owner_name.split(' ')[0]}</div>}
                                   </div>
                                   <div style={{ display:'flex', gap:8, fontSize:'.68rem', color:'var(--muted)' }}>
                                     {t.post_date && <span style={{ color:'#9D7FFF' }}>📤 {String(t.post_date).slice(0,10)}</span>}

@@ -2,7 +2,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { Card, Btn, Modal, Input, Select, EmptyState, Spinner, toast, sounds, askAI } from '../components/UI';
+import { Card, Btn, Modal, Input, Select, EmptyState, Spinner, Avatar, toast, sounds, askAI } from '../components/UI';
 
 async function fetchJ(url,method='GET',body){
   const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
@@ -94,7 +94,16 @@ export default function Followups() {
                     <div style={{flex:1}}>
                       <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:5}}>{f.subject}</div>
                       <div style={{fontSize:'.76rem',color:'var(--muted2)',marginBottom:6}}>
-                        🏢 {f.client_name||'No client'}{f.assignee_name?' · 👤 '+f.assignee_name:''}
+                        <span style={{display:'inline-flex',alignItems:'center',gap:5}}>
+                        {f.client_logo?<img src={f.client_logo} alt={f.client_name} style={{width:14,height:14,borderRadius:3,objectFit:'cover'}}/>:'🏢'}
+                        {f.client_name||'No client'}
+                      </span>
+                      {f.assignee_name&&(
+                        <span style={{display:'inline-flex',alignItems:'center',gap:5,marginLeft:8}}>
+                          <Avatar name={f.assignee_name} image={f.assignee_image} size={16} color="#7C5CFC"/>
+                          {f.assignee_name}
+                        </span>
+                      )}
                       </div>
                       {f.due_date&&<span style={{background:'rgba(255,77,109,.1)',color:'var(--red)',fontSize:'.68rem',fontWeight:700,padding:'2px 8px',borderRadius:20}}>⏰ {String(f.due_date).slice(0,10)}</span>}
                     </div>

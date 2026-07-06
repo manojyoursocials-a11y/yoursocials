@@ -92,7 +92,7 @@ export default function Dashboard() {
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
             {members.slice(0,6).map((m,i)=>(
               <Card key={m.id} hover onClick={()=>router.push('/team')} style={{display:'flex',alignItems:'center',gap:12}}>
-                <Avatar name={m.name||m.email} size={38} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                <Avatar name={m.name||m.email} image={m.image} size={38} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
                 <div><div style={{fontSize:'.82rem',fontWeight:700}}>{m.name||m.email?.split('@')[0]}</div><div style={{fontSize:'.68rem',color:'var(--muted)'}}>{m.job_title||m.role}</div><div style={{fontSize:'.7rem',color:'var(--yellow)',marginTop:2}}>🪙 {(m.coins||0).toLocaleString()}</div></div>
               </Card>
             ))}

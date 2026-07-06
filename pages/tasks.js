@@ -496,12 +496,12 @@ export default function Tasks() {
                 <div style={{display:'flex',gap:16,marginBottom:14,padding:'10px 14px',background:'rgba(255,255,255,.03)',borderRadius:10,border:'1px solid rgba(255,255,255,.07)'}}>
                   <div style={{flex:1}}>
                     <div style={{fontSize:'.63rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5}}>Assigner</div>
-                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.created_by_name||'?'} size={26} color="#FF5FA0"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.created_by_name||'Unknown'}</span></div>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.created_by_name||'?'} image={detail.created_by_image} size={26} color="#FF5FA0"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.created_by_name||'Unknown'}</span></div>
                   </div>
                   <div style={{width:1,background:'rgba(255,255,255,.08)'}}/>
                   <div style={{flex:1}}>
                     <div style={{fontSize:'.63rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5}}>Assignee</div>
-                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.owner_name||'?'} size={26} color="#7C5CFC"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.owner_name||'Unassigned'}</span></div>
+                    <div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={detail.owner_name||'?'} image={detail.owner_image} size={26} color="#7C5CFC"/><span style={{fontSize:'.82rem',fontWeight:600,color:'#F0EFFF'}}>{detail.owner_name||'Unassigned'}</span></div>
                   </div>
                 </div>
 
@@ -588,8 +588,8 @@ function TaskCard({ task, onClick, dimmed=false, indent=false }) {
       </div>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:5}}>
-          {task.created_by_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.63rem',color:'#6B6B8A'}} title={'Assigner: '+task.created_by_name}><Avatar name={task.created_by_name} size={16} color="#FF5FA0"/></div>}
-          {task.owner_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.65rem',color:'#9090AA'}} title={'Assignee: '+task.owner_name}><span style={{color:'#6B6B8A',fontSize:'.55rem'}}>→</span><Avatar name={task.owner_name} size={16} color="#7C5CFC"/><span>{task.owner_name.split(' ')[0]}</span></div>}
+          {task.created_by_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.63rem',color:'#6B6B8A'}} title={'Assigner: '+task.created_by_name}><Avatar name={task.created_by_name} image={task.created_by_image} size={16} color="#FF5FA0"/></div>}
+          {task.owner_name&&<div style={{display:'flex',alignItems:'center',gap:3,fontSize:'.65rem',color:'#9090AA'}} title={'Assignee: '+task.owner_name}><span style={{color:'#6B6B8A',fontSize:'.55rem'}}>→</span><Avatar name={task.owner_name} image={task.owner_image} size={16} color="#7C5CFC"/><span>{task.owner_name.split(' ')[0]}</span></div>}
         </div>
         {task.deadline&&<span style={{fontSize:'.63rem',color:over?'#FF4D6D':'#6B6B8A'}}>📅 {String(task.deadline).slice(0,10)}</span>}
       </div>

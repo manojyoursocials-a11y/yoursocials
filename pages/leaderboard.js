@@ -26,7 +26,7 @@ export default function Leaderboard() {
             {members.map((m,i)=>(
               <div key={m.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:10,marginBottom:4,background:i===0?'rgba(255,214,10,.06)':'transparent',border:i===0?'1px solid rgba(255,214,10,.12)':'1px solid transparent'}}>
                 <div style={{width:28,textAlign:'center',fontSize:i<3?'1.1rem':'.85rem',fontWeight:700,color:i===0?'var(--yellow)':i===1?'#C0C0C0':i===2?'#CD7F32':'var(--muted)'}}>{i<3?RANKS[i]:i+1}</div>
-                <Avatar name={m.name||m.email} size={34} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                <Avatar name={m.name||m.email} image={m.image} size={34} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:'.84rem',fontWeight:700}}>{m.name||m.email?.split('@')[0]}</div>
                   <div style={{fontSize:'.68rem',color:'var(--muted)'}}>{m.job_title||m.role} · {m.done_tasks||0} tasks done</div>

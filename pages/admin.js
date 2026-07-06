@@ -167,7 +167,7 @@ export default function Admin() {
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
               {users.map((u,i)=>(
                 <Card key={u.id} style={{display:'flex',alignItems:'center',gap:12}}>
-                  <Avatar name={u.name||u.email} size={42} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                  <Avatar name={u.name||u.email} image={u.image} size={42} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:700,fontSize:'.88rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{u.name||u.email?.split('@')[0]}</div>
                     <div style={{fontSize:'.72rem',color:'var(--muted)',marginBottom:3}}>{u.job_title||u.role}</div>
@@ -194,7 +194,7 @@ export default function Admin() {
                 <Card key={u.id} style={{position:'relative',border:isMe?'1px solid rgba(124,92,252,.3)':undefined}}>
                   {isMe&&<div style={{position:'absolute',top:10,right:10,fontSize:'.62rem',fontWeight:700,background:'rgba(124,92,252,.15)',color:'var(--purple2)',padding:'2px 7px',borderRadius:20}}>You</div>}
                   <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
-                    <Avatar name={u.name||u.email} size={42} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
+                    <Avatar name={u.name||u.email} image={u.image} size={42} color={MEMBER_COLORS[i%MEMBER_COLORS.length]}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:800,fontSize:'.9rem'}}>{u.name}</div>
                       <div style={{fontSize:'.73rem',color:'var(--muted)',marginBottom:3}}>{u.email}</div>
