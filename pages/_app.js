@@ -10,6 +10,16 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
         <meta name="theme-color" content="#09090F"/>
         <meta name="apple-mobile-web-app-capable" content="yes"/>
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+        <meta name="apple-mobile-web-app-title" content="Your Socials"/>
+
+        {/* Favicon — Your Socials logo */}
+        <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png"/>
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+        <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png"/>
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+        <link rel="shortcut icon" href="/favicon.ico"/>
+
         <title>Your Socials OS</title>
       </Head>
       <Component {...pageProps}/>
