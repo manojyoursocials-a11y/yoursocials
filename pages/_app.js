@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { SessionProvider } from 'next-auth/react';
 import Head from 'next/head';
 import '../styles/globals.css';
+import { Analytics } from '@vercel/analytics/next';
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
   // Auto-run setup on first load (idempotent — safe to run every time)
@@ -28,6 +29,7 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
         <title>Your Socials OS</title>
       </Head>
       <Component {...pageProps}/>
+      <Analytics />
     </SessionProvider>
   );
 }
