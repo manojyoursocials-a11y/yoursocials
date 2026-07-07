@@ -27,6 +27,7 @@ export default function Finance() {
   const { status, data: session } = useSession();
   const router = useRouter();
   useEffect(() => { if (status==='unauthenticated') router.replace('/login'); }, [status]);
+  useEffect(() => { if (status==='authenticated' && session?.user?.role !== 'admin') router.replace('/'); }, [status, session]);
 
   const [entries,  setEntries]  = useState([]);
   const [summary,  setSummary]  = useState(null);

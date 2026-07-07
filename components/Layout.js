@@ -7,6 +7,7 @@ import { Avatar, ToastContainer } from './UI';
 const NAV = [
   { path:'/',            icon:'🏠', label:'Dashboard' },
   { path:'/tasks',       icon:'✅', label:'Tasks',      badge:'tasks' },
+  { path:'/chat',        icon:'💬', label:'Chat' },
   { path:'/ai',          icon:'🤖', label:'AI Manager' },
   { section:'Team' },
   { path:'/team',        icon:'👥', label:'Members' },
@@ -16,7 +17,7 @@ const NAV = [
   { path:'/clients',     icon:'🏢', label:'Clients' },
   { path:'/followups',   icon:'📩', label:'Follow-ups', badge:'followups' },
   { path:'/analytics',   icon:'📊', label:'Analytics' },
-  { path:'/finance',     icon:'💰', label:'Finance' },
+
 ];
 
 function LiveClock() {
@@ -54,7 +55,7 @@ export default function Layout({ children, badges = {} }) {
 
   const allNav = [
     ...NAV,
-    ...(isAdmin ? [{ section:'Admin' }, { path:'/admin', icon:'⚙️', label:'Manage Users' }] : []),
+    ...(isAdmin ? [{ section:'Admin' }, { path:'/admin', icon:'⚙️', label:'Manage Users' }, { path:'/finance', icon:'💰', label:'Finance' }] : []),
   ];
 
   function NavItem({ item, i }) {
