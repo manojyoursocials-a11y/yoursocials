@@ -1,7 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 
-const TYPE_EMOJI = { task_assigned:'📋', task_moved:'⚡', default:'🔔' };
+const TYPE_EMOJI = {
+  task_created:   '📋',
+  task_assigned:  '👤',
+  task_moved:     '⚡',
+  task_edited:    '✏️',
+  task_deleted:   '🗑',
+  followup_created:'📩',
+  followup_done:  '✅',
+  client_created: '🏢',
+  client_updated: '🏢',
+  client_deleted: '🏢',
+  default:        '🔔',
+};
 
 // Audio context singleton — only created after user interaction
 let _audio = null;

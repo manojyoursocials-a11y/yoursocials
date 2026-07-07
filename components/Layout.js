@@ -7,8 +7,6 @@ import { Avatar, ToastContainer } from './UI';
 const NAV = [
   { path:'/',            icon:'🏠', label:'Dashboard' },
   { path:'/tasks',       icon:'✅', label:'Tasks',      badge:'tasks' },
-  { path:'/chat',        icon:'💬', label:'Chat' },
-  { path:'/ai',          icon:'🤖', label:'AI Manager' },
   { section:'Team' },
   { path:'/team',        icon:'👥', label:'Members' },
   { path:'/leaderboard', icon:'🏆', label:'Leaderboard' },

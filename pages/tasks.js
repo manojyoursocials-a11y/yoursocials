@@ -68,6 +68,7 @@ export default function Tasks() {
   const [detail,   setDetail]   = useState(null);
   const [form,     setForm]     = useState(blank());
   const [links,    setLinks]    = useState([]); // array of URL strings
+  const [media,    setMedia]    = useState([]); // array of {name, type, data} uploaded files
   const [newLink,  setNewLink]  = useState('');
   const [checks,   setChecks]   = useState([]);
   const [aiLoad,   setAiLoad]   = useState(false);
@@ -166,6 +167,7 @@ export default function Tasks() {
     try { setLinks(JSON.parse(task.links || '[]')); } catch { setLinks([]); }
     try { setChecks(JSON.parse(task.ai_checklist || '[]')); } catch { setChecks([]); }
     setNewLink('');
+    try { setMedia(JSON.parse(task.media||'[]')); } catch { setMedia([]); }
     setDetail(null);
     setModal(true);
   }
@@ -178,6 +180,7 @@ export default function Tasks() {
       title:           form.title.trim(),
       description:     form.description.trim(),
       links:           JSON.stringify(links),
+      media:           JSON.stringify(media),
       owner_id:        form.owner_id || null,
       client_id:       form.client_id || null,
       deadline:        form.deadline || null,
@@ -416,28 +419,75 @@ export default function Tasks() {
           <Input label="Title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Instagram Reels — June Recap"/>
           <RichEditor value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="What needs to be done… (supports bold, italic, bullets)"/>
 
-          {/* Multiple links section */}
+          {/* ── REFERENCES: Links + Media Upload ── */}
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:'.73rem',fontWeight:600,color:'#9090AA',marginBottom:8}}>🔗 Links (add multiple)</div>
-            {links.map((url,idx)=>(
-              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'rgba(124,92,252,.08)',border:'1px solid rgba(124,92,252,.2)',borderRadius:8,marginBottom:6}}>
-                <span style={{fontSize:'.75rem',color:'#9D7FFF',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getLinkLabel(url)}</span>
-                <a href={url} target="_blank" rel="noopener noreferrer" style={{fontSize:'.7rem',color:'#9D7FFF',textDecoration:'none'}} onClick={e=>e.stopPropagation()}>↗</a>
-                <button onClick={()=>removeLink(idx)} style={{background:'none',border:'none',color:'#FF4D6D',cursor:'pointer',fontSize:'.8rem',padding:'0 2px'}}>✕</button>
+            <div style={{fontSize:'.73rem',fontWeight:600,color:'#9090AA',marginBottom:10,letterSpacing:'.04em'}}>📎 REFERENCES</div>
+
+            {/* Existing links */}
+            {links.length>0&&links.map((url,idx)=>(
+              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 11px',background:'rgba(124,92,252,.08)',border:'1px solid rgba(124,92,252,.2)',borderRadius:9,marginBottom:6}}>
+                <span style={{fontSize:'.8rem'}}>🔗</span>
+                <span style={{fontSize:'.76rem',color:'#9D7FFF',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getLinkLabel(url)}</span>
+                <a href={url} target="_blank" rel="noopener noreferrer" style={{fontSize:'.72rem',color:'#9D7FFF',textDecoration:'none',flexShrink:0}} onClick={e=>e.stopPropagation()}>↗</a>
+                <button onClick={()=>removeLink(idx)} style={{background:'none',border:'none',color:'#FF4D6D',cursor:'pointer',fontSize:'.85rem',padding:'0 3px',lineHeight:1}}>✕</button>
               </div>
             ))}
-            <div style={{display:'flex',gap:8}}>
+
+            {/* Uploaded media previews */}
+            {media.length>0&&(
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:8,marginBottom:10}}>
+                {media.map((m,idx)=>(
+                  <div key={idx} style={{position:'relative',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,.1)',background:'#1C1C28'}}>
+                    {m.type==='image'&&<img src={m.data} alt={m.name} style={{width:'100%',height:72,objectFit:'cover',display:'block'}}/>}
+                    {m.type==='video'&&<div style={{height:72,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.4)'}}><span style={{fontSize:'1.8rem'}}>🎬</span></div>}
+                    {m.type==='pdf'&&<div style={{height:72,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,77,109,.08)'}}><span style={{fontSize:'1.8rem'}}>📄</span></div>}
+                    {m.type==='file'&&<div style={{height:72,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,212,255,.06)'}}><span style={{fontSize:'1.8rem'}}>📎</span></div>}
+                    <div style={{padding:'4px 6px',fontSize:'.6rem',color:'#9090AA',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{m.name}</div>
+                    <button onClick={()=>setMedia(prev=>prev.filter((_,i)=>i!==idx))} style={{position:'absolute',top:3,right:3,background:'rgba(0,0,0,.7)',border:'none',borderRadius:'50%',width:18,height:18,color:'#fff',cursor:'pointer',fontSize:'.65rem',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add link input */}
+            <div style={{display:'flex',gap:8,marginBottom:8}}>
               <input
                 value={newLink}
                 onChange={e=>setNewLink(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&(e.preventDefault(),addLink())}
-                placeholder="Paste URL and press Enter or click Add"
+                placeholder="Paste URL (Drive, Figma, Notion…) + Enter"
                 style={{flex:1,background:'#1C1C28',border:'1px solid rgba(255,255,255,.13)',borderRadius:9,padding:'8px 12px',fontSize:'.8rem',color:'#F0EFFF',fontFamily:'Inter,sans-serif',outline:'none'}}
                 onFocus={e=>e.target.style.borderColor='#7C5CFC'}
                 onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'}
               />
-              <button onClick={addLink} style={{padding:'8px 14px',background:'rgba(124,92,252,.15)',border:'1px solid rgba(124,92,252,.3)',borderRadius:9,color:'#9D7FFF',fontSize:'.8rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>+ Add</button>
+              <button onClick={addLink} style={{padding:'8px 14px',background:'rgba(124,92,252,.15)',border:'1px solid rgba(124,92,252,.3)',borderRadius:9,color:'#9D7FFF',fontSize:'.8rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>+ Link</button>
             </div>
+
+            {/* Upload media button */}
+            <label style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',background:'rgba(0,212,255,.06)',border:'1px dashed rgba(0,212,255,.3)',borderRadius:9,cursor:'pointer',color:'#00D4FF',fontSize:'.8rem',fontWeight:600,fontFamily:'Inter,sans-serif',transition:'all .15s'}}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,212,255,.12)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,212,255,.06)';}}>
+              📤 Upload Images / Videos / Files
+              <span style={{fontSize:'.7rem',color:'#6B6B8A',fontWeight:400,marginLeft:4}}>max 5MB each</span>
+              <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.psd,.ai" style={{display:'none'}}
+                onChange={async e=>{
+                  const files = Array.from(e.target.files||[]);
+                  for (const file of files) {
+                    if (file.size > 5*1024*1024) { toast.error(file.name+' exceeds 5MB'); continue; }
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                      const ext = file.name.split('.').pop().toLowerCase();
+                      const type = file.type.startsWith('image/') ? 'image'
+                                 : file.type.startsWith('video/') ? 'video'
+                                 : ext==='pdf' ? 'pdf' : 'file';
+                      setMedia(prev=>[...prev,{name:file.name,type,data:ev.target.result}]);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                  e.target.value='';
+                }}
+              />
+            </label>
           </div>
 
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
@@ -508,22 +558,47 @@ export default function Tasks() {
 
                 {detail.description&&detail.description!=='<br>'&&<RichContent html={detail.description} style={{color:'#9090AA'}}/>}
 
-                {/* Multiple links */}
-                {taskLinks.length>0&&(
-                  <div style={{marginBottom:14}}>
-                    <div style={{fontSize:'.68rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Links</div>
-                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                      {taskLinks.map((url,i)=>(
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                          style={{display:'inline-flex',alignItems:'center',gap:8,padding:'8px 12px',background:'rgba(124,92,252,.1)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,fontSize:'.82rem',color:'#9D7FFF',textDecoration:'none',fontWeight:600,transition:'background .15s'}}
-                          onMouseEnter={e=>e.currentTarget.style.background='rgba(124,92,252,.2)'}
-                          onMouseLeave={e=>e.currentTarget.style.background='rgba(124,92,252,.1)'}>
-                          {getLinkLabel(url)} <span style={{fontSize:'.7rem',opacity:.7}}>↗</span>
-                        </a>
-                      ))}
+                {/* ── REFERENCES: Media + Links ── */}
+                {(()=>{
+                  let taskMedia = [];
+                  try { taskMedia = JSON.parse(detail.media||'[]'); } catch {}
+                  if (taskLinks.length===0 && taskMedia.length===0) return null;
+                  return (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:'.68rem',fontWeight:700,color:'#6B6B8A',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>📎 References</div>
+
+                      {/* Media grid */}
+                      {taskMedia.length>0&&(
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:8,marginBottom:10}}>
+                          {taskMedia.map((m,i)=>(
+                            <div key={i} style={{borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,.1)',background:'#1C1C28',cursor:'pointer'}}
+                              onClick={()=>{ if(m.type==='image'||m.type==='video'||m.type==='pdf') window.open(m.data,'_blank'); else { const a=document.createElement('a');a.href=m.data;a.download=m.name;a.click(); } }}>
+                              {m.type==='image'&&<img src={m.data} alt={m.name} style={{width:'100%',height:80,objectFit:'cover',display:'block'}}/>}
+                              {m.type==='video'&&<div style={{height:80,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.5)',flexDirection:'column',gap:4}}><span style={{fontSize:'1.8rem'}}>🎬</span></div>}
+                              {m.type==='pdf'&&<div style={{height:80,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,77,109,.06)',flexDirection:'column',gap:4}}><span style={{fontSize:'1.8rem'}}>📄</span></div>}
+                              {m.type==='file'&&<div style={{height:80,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,212,255,.05)',flexDirection:'column',gap:4}}><span style={{fontSize:'1.8rem'}}>📎</span></div>}
+                              <div style={{padding:'5px 7px',fontSize:'.62rem',color:'#9090AA',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={m.name}>{m.name}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* URL links */}
+                      {taskLinks.length>0&&(
+                        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                          {taskLinks.map((url,i)=>(
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:8,padding:'8px 12px',background:'rgba(124,92,252,.1)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,fontSize:'.82rem',color:'#9D7FFF',textDecoration:'none',fontWeight:600,transition:'background .15s'}}
+                              onMouseEnter={e=>e.currentTarget.style.background='rgba(124,92,252,.2)'}
+                              onMouseLeave={e=>e.currentTarget.style.background='rgba(124,92,252,.1)'}>
+                              🔗 {getLinkLabel(url)} <span style={{fontSize:'.7rem',opacity:.7}}>↗</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Move To */}
                 <div style={{marginBottom:14,padding:14,background:'rgba(255,255,255,.02)',borderRadius:12,border:'1px solid rgba(255,255,255,.07)'}}>
