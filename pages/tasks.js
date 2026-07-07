@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import { Btn, Modal, Input, Select, Textarea, Tag, Avatar, Spinner, launchConfetti, toast, sounds, askAI } from '../components/UI';
+import RichEditor, { RichContent } from '../components/RichEditor';
 
 // ── Mobile detection ───────────────────────────────────
 function useIsMobile() {
@@ -413,7 +414,7 @@ export default function Tasks() {
         {/* ── CREATE / EDIT MODAL ─────────────────────────── */}
         <Modal open={modal} onClose={()=>{setModal(false);setEditing(null);}} title={editing?'✏️ Edit Task':'+ New Task'} width={620}>
           <Input label="Title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Instagram Reels — June Recap"/>
-          <Textarea label="Description" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="What needs to be done…"/>
+          <RichEditor value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="What needs to be done… (supports bold, italic, bullets)"/>
 
           {/* Multiple links section */}
           <div style={{marginBottom:14}}>
@@ -505,7 +506,7 @@ export default function Tasks() {
                   </div>
                 </div>
 
-                {detail.description&&<p style={{fontSize:'.83rem',color:'#9090AA',lineHeight:1.6,marginBottom:14}}>{detail.description}</p>}
+                {detail.description&&detail.description!=='<br>'&&<RichContent html={detail.description} style={{color:'#9090AA'}}/>}
 
                 {/* Multiple links */}
                 {taskLinks.length>0&&(

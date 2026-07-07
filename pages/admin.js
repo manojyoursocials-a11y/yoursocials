@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Card, Btn, Modal, Input, Select, Textarea, Avatar, Spinner, EmptyState, toast, sounds, api, MEMBER_COLORS } from '../components/UI';
 
-const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups'];
+const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups','Finance'];
 
 export default function Admin() {
   const { data: session, status } = useSession();
@@ -356,6 +356,24 @@ export default function Admin() {
           </div>
         )}
       </div>
+
+      {tab==='Finance'&&(
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div>
+                <h3 style={{fontWeight:900,fontSize:'1.1rem',marginBottom:4}}>💰 Finance Management</h3>
+                <p style={{fontSize:'.82rem',color:'var(--muted2)'}}>Full finance module is available as a dedicated page</p>
+              </div>
+              <Btn onClick={()=>router.push('/finance')}>Open Finance →</Btn>
+            </div>
+            <Card style={{background:'linear-gradient(135deg,rgba(0,229,160,.06),rgba(0,212,255,.04))',borderColor:'rgba(0,229,160,.2)',textAlign:'center',padding:'32px 24px'}}>
+              <div style={{fontSize:'3rem',marginBottom:12}}>💰</div>
+              <div style={{fontWeight:800,fontSize:'1.1rem',marginBottom:8}}>Finance Dashboard</div>
+              <div style={{fontSize:'.82rem',color:'var(--muted2)',marginBottom:20,lineHeight:1.6}}>Track income, expenses, daily cashflow, monthly reports,<br/>payment modes and export CSV reports</div>
+              <Btn onClick={()=>router.push('/finance')}>Go to Finance →</Btn>
+            </Card>
+          </div>
+        )}
 
       {/* ── MODALS ─────────────────────────────── */}
 

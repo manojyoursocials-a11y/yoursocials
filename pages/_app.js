@@ -1,8 +1,13 @@
+import { useEffect } from 'react';
 import { SessionProvider } from 'next-auth/react';
 import Head from 'next/head';
 import '../styles/globals.css';
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
+  // Auto-run setup on first load (idempotent — safe to run every time)
+  useEffect(() => {
+    fetch('/api/setup', { method: 'POST' }).catch(() => {});
+  }, []);
   return (
     <SessionProvider session={session}>
       <Head>

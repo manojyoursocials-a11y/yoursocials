@@ -16,6 +16,7 @@ const NAV = [
   { path:'/clients',     icon:'🏢', label:'Clients' },
   { path:'/followups',   icon:'📩', label:'Follow-ups', badge:'followups' },
   { path:'/analytics',   icon:'📊', label:'Analytics' },
+  { path:'/finance',     icon:'💰', label:'Finance' },
 ];
 
 function LiveClock() {
