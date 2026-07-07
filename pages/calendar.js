@@ -452,7 +452,7 @@ export default function Calendar() {
           </div>
 
           {/* Mini month picker + calendar list - collapsible on mobile */}
-          {(!isMobile||mobileSidebarOpen)&&<div style={{padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
+          <div style={{display:(!isMobile||mobileSidebarOpen)?'block':'none',padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
               <button onClick={prevMonth} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'.9rem',padding:4}}>‹</button>
               <div style={{fontSize:'.78rem',fontWeight:700,color:'var(--text)'}}>{MONTHS[curDate.getMonth()].slice(0,3)} {curDate.getFullYear()}</div>
@@ -474,9 +474,9 @@ export default function Calendar() {
             </div>
           </div>
 
-          </div>}
+          </div>
           {/* Calendar list */}
-          {(!isMobile||mobileSidebarOpen)&&<div style={{flex:1,overflowY:'auto',padding:'8px 10px',maxHeight:isMobile?240:undefined}}>
+          <div style={{display:(!isMobile||mobileSidebarOpen)?'flex':'none',flex:1,flexDirection:'column',overflowY:'auto',padding:'8px 10px',maxHeight:isMobile?240:undefined}}>
             {/* All calendars option */}
             <button onClick={()=>{setActiveCalId('all');setSelectedDay(null);}}
               style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:9,border:'none',background:activeCalId==='all'?'rgba(124,92,252,.12)':'transparent',cursor:'pointer',fontFamily:'Inter,sans-serif',marginBottom:4,textAlign:'left',transition:'all .15s'}}
@@ -513,7 +513,7 @@ export default function Calendar() {
                 </div>
               </div>
             ))}
-          </div>}
+          </div>
         </div>
 
         {/* ── MAIN: Calendar view ──────────────────────── */}
