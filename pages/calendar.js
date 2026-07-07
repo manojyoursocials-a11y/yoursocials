@@ -1,4 +1,15 @@
 import { useSession } from 'next-auth/react';
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return mobile;
+}
 import { useRouter } from 'next/router';
 import { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
@@ -39,7 +50,9 @@ export default function Calendar() {
   const router = useRouter();
   useEffect(() => { if (status === 'unauthenticated') router.replace('/login'); }, [status]);
 
-  const isAdmin = session?.user?.role === 'admin';
+  const isAdmin  = session?.user?.role === 'admin';
+  const isMobile = useIsMobile();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [calendars,   setCalendars]   = useState([]);
   const [posts,       setPosts]       = useState([]);
@@ -420,14 +433,17 @@ export default function Calendar() {
 
   return (
     <Layout>
-      <div style={{display:'flex',height:'calc(100dvh - 110px)',gap:0,overflow:'hidden'}}>
+      <div style={{display:'flex',flexDirection:isMobile?'column':'row',height:isMobile?'auto':'calc(100dvh - 110px)',gap:0,overflow:isMobile?'auto':'hidden'}}>
 
         {/* ── LEFT SIDEBAR: Calendar list ──────────────── */}
-        <div style={{width:240,minWidth:240,background:'var(--surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden',flexShrink:0}}>
+        <div style={{width:isMobile?'100%':240,minWidth:isMobile?'unset':240,background:'var(--surface)',borderRight:isMobile?'none':'1px solid var(--border)',borderBottom:isMobile?'1px solid var(--border)':'none',display:'flex',flexDirection:'column',overflow:'hidden',flexShrink:0,maxHeight:isMobile?mobileSidebarOpen?'80vh':'auto':undefined}}>
           {/* Header */}
           <div style={{padding:'14px 14px 10px',borderBottom:'1px solid var(--border)'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-              <div style={{fontWeight:800,fontSize:'.95rem'}}>📅 Calendars</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <div style={{fontWeight:800,fontSize:'.95rem'}}>📅 Calendars</div>
+                {isMobile&&<button onClick={()=>setMobileSidebarOpen(o=>!o)} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'.8rem',padding:4}}>{mobileSidebarOpen?'▲':'▼'}</button>}
+              </div>
               <button onClick={()=>{setEditingCal(null);setCalForm(blankCal());setCalModal(true);}}
                 style={{background:'var(--purple)',border:'none',borderRadius:7,padding:'4px 10px',color:'#fff',fontSize:'.72rem',fontWeight:700,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
                 + New
@@ -435,8 +451,8 @@ export default function Calendar() {
             </div>
           </div>
 
-          {/* Mini month picker */}
-          <div style={{padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
+          {/* Mini month picker + calendar list - collapsible on mobile */}
+          {(!isMobile||mobileSidebarOpen)&&<div style={{padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
               <button onClick={prevMonth} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'.9rem',padding:4}}>‹</button>
               <div style={{fontSize:'.78rem',fontWeight:700,color:'var(--text)'}}>{MONTHS[curDate.getMonth()].slice(0,3)} {curDate.getFullYear()}</div>
@@ -458,8 +474,9 @@ export default function Calendar() {
             </div>
           </div>
 
+          </div>}
           {/* Calendar list */}
-          <div style={{flex:1,overflowY:'auto',padding:'8px 10px'}}>
+          {(!isMobile||mobileSidebarOpen)&&<div style={{flex:1,overflowY:'auto',padding:'8px 10px',maxHeight:isMobile?240:undefined}}>
             {/* All calendars option */}
             <button onClick={()=>{setActiveCalId('all');setSelectedDay(null);}}
               style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:9,border:'none',background:activeCalId==='all'?'rgba(124,92,252,.12)':'transparent',cursor:'pointer',fontFamily:'Inter,sans-serif',marginBottom:4,textAlign:'left',transition:'all .15s'}}
@@ -496,14 +513,14 @@ export default function Calendar() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
 
         {/* ── MAIN: Calendar view ──────────────────────── */}
-        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
+        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:isMobile?'visible':'hidden',minWidth:0,minHeight:isMobile?'60vh':undefined}}>
 
           {/* Top bar */}
-          <div style={{padding:'12px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,flexShrink:0,background:'var(--surface)'}}>
+          <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8,flexShrink:0,background:'var(--surface)',flexWrap:'wrap',rowGap:8}}>
             <div style={{display:'flex',alignItems:'center',gap:6}}>
               <button onClick={prevMonth} style={{background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:8,padding:'5px 10px',color:'var(--muted2)',cursor:'pointer',fontSize:'.8rem'}}>‹</button>
               <button onClick={goToday}   style={{background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:8,padding:'5px 12px',color:'var(--muted2)',cursor:'pointer',fontSize:'.78rem',fontWeight:600}}>Today</button>
@@ -556,7 +573,7 @@ export default function Calendar() {
           {viewMode==='month'&&(
             <div style={{flex:1,overflow:'auto',padding:'0 0 16px'}}>
               {/* Day headers */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderBottom:'1px solid var(--border)',position:'sticky',top:0,background:'var(--surface2)',zIndex:10}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderBottom:'1px solid var(--border)',position:'sticky',top:0,background:'var(--surface2)',zIndex:10,fontSize:isMobile?'.65rem':undefined}}>
                 {DAYS.map(d=>(
                   <div key={d} style={{padding:'10px 12px',fontSize:'.72rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'center'}}>{d}</div>
                 ))}
@@ -571,7 +588,7 @@ export default function Calendar() {
                     return (
                       <div key={ci}
                         onClick={()=>{ if(cell.dateStr){setSelectedDay(cell.dateStr);} }}
-                        style={{borderRight:ci<6?'1px solid var(--border)':'none',padding:'8px 8px 6px',background:isSel?'rgba(124,92,252,.06)':isToday?'rgba(124,92,252,.04)':'transparent',cursor:'pointer',transition:'background .1s',minHeight:120,position:'relative'}}
+                        style={{borderRight:ci<6?'1px solid var(--border)':'none',padding:isMobile?'5px 4px':' 8px 8px 6px',background:isSel?'rgba(124,92,252,.06)':isToday?'rgba(124,92,252,.04)':'transparent',cursor:'pointer',transition:'background .1s',minHeight:isMobile?70:120,position:'relative'}}
                         onMouseEnter={e=>{ if(!isSel)e.currentTarget.style.background='rgba(255,255,255,.02)'; }}
                         onMouseLeave={e=>{ if(!isSel)e.currentTarget.style.background=isToday?'rgba(124,92,252,.04)':'transparent'; }}>
                         {/* Day number */}
@@ -589,7 +606,7 @@ export default function Calendar() {
                           return (
                             <div key={p.id}
                               onClick={e=>{e.stopPropagation();setDetailPost(p);}}
-                              style={{padding:'3px 7px',borderRadius:5,background:color+'22',borderLeft:'3px solid '+color,marginBottom:3,fontSize:'.68rem',fontWeight:600,color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer',transition:'all .12s'}}
+                              style={{padding:'2px 4px',borderRadius:4,background:color+'22',borderLeft:'2px solid '+color,marginBottom:2,fontSize:isMobile?'.58rem':'.68rem',fontWeight:600,color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer',transition:'all .12s'}}
                               onMouseEnter={e=>e.currentTarget.style.background=color+'44'}
                               onMouseLeave={e=>e.currentTarget.style.background=color+'22'}>
                               {sc.emoji} {p.title}

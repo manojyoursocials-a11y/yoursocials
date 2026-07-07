@@ -391,12 +391,30 @@ export default function Tasks() {
             <button onClick={openCreate} style={{marginLeft:'auto',padding:'8px 18px',background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)',border:'none',borderRadius:10,color:'#fff',fontWeight:700,fontSize:'.82rem',cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap'}}>+ New Task</button>
           </div>
 
+          {/* Mobile column tab switcher */}
+          {isMobile&&(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:10}}>
+              {COLS.map(col=>{
+                const cnt=filtered.filter(t=>t.status===col.id).length;
+                const isAct=mobileCol===col.id;
+                return (
+                  <button key={col.id} onClick={()=>setMobileCol(col.id)}
+                    style={{padding:'8px 4px',borderRadius:10,border:'1px solid '+(isAct?col.color:'rgba(255,255,255,.08)'),background:isAct?col.color+'22':'rgba(255,255,255,.03)',color:isAct?col.color:'#6B6B8A',fontSize:'.72rem',fontWeight:700,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',flexDirection:'column',alignItems:'center',gap:3,lineHeight:1.2}}>
+                    <span style={{fontSize:'1rem'}}>{col.emoji}</span>
+                    <span style={{fontSize:'.6rem',whiteSpace:'nowrap'}}>{col.label}</span>
+                    <span style={{background:isAct?col.color+'44':'rgba(255,255,255,.1)',color:isAct?col.color:'#6B6B8A',padding:'1px 6px',borderRadius:20,fontSize:'.65rem',fontWeight:800,minWidth:18,textAlign:'center'}}>{cnt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Kanban */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,flex:1,overflow:'hidden'}}>
-            {COLS.map(col=>{
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:12,flex:1,overflow:isMobile?'auto':'hidden'}}>
+            {COLS.filter(col=>!isMobile||col.id===mobileCol).map(col=>{
               const colTasks=filtered.filter(t=>t.status===col.id);
               return (
-                <div key={col.id} style={{background:'#16161F',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div key={col.id} style={{background:'#16161F',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:isMobile?'60vh':undefined}}>
                   <div style={{padding:'12px 12px 8px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
                     <span style={{fontSize:'.8rem',fontWeight:700,color:col.color}}>{col.emoji} {col.label}</span>
                     <span style={{background:'#1C1C28',color:'#9090AA',fontSize:'.62rem',fontWeight:700,padding:'2px 7px',borderRadius:20}}>{colTasks.length}</span>
