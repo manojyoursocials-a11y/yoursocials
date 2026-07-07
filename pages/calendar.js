@@ -588,7 +588,7 @@ export default function Calendar() {
                     return (
                       <div key={ci}
                         onClick={()=>{ if(cell.dateStr){setSelectedDay(cell.dateStr);} }}
-                        style={{borderRight:ci<6?'1px solid var(--border)':'none',padding:isMobile?'5px 4px':' 8px 8px 6px',background:isSel?'rgba(124,92,252,.06)':isToday?'rgba(124,92,252,.04)':'transparent',cursor:'pointer',transition:'background .1s',minHeight:isMobile?70:120,position:'relative'}}
+                        style={{borderRight:ci<6?'1px solid var(--border)':'none',padding:isMobile?'5px 4px':'8px 8px 6px',background:isSel?'rgba(124,92,252,.06)':isToday?'rgba(124,92,252,.04)':'transparent',cursor:'pointer',transition:'background .1s',minHeight:isMobile?70:120,position:'relative'}}
                         onMouseEnter={e=>{ if(!isSel)e.currentTarget.style.background='rgba(255,255,255,.02)'; }}
                         onMouseLeave={e=>{ if(!isSel)e.currentTarget.style.background=isToday?'rgba(124,92,252,.04)':'transparent'; }}>
                         {/* Day number */}
