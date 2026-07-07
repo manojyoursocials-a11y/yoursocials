@@ -253,8 +253,7 @@ export default function Calendar() {
   }
 
   function parseCSV(text) {
-    const lines = text.trim().split('
-');
+    const lines = text.trim().split('\n');
     if (lines.length < 2) return [];
     // Parse CSV respecting quoted fields
     function parseLine(line) {

@@ -2,56 +2,94 @@ import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 
+const iStyle = { width:'100%', background:'#1C1C28', border:'1px solid rgba(255,255,255,.13)', borderRadius:12, padding:'12px 16px', fontSize:'16px', color:'#F0EFFF', fontFamily:'Inter,sans-serif', outline:'none', boxSizing:'border-box', transition:'border-color .2s' };
+
 export default function Login() {
-  const { data: session } = useSession();
-  const router = useRouter();
+  const { status } = useSession();
+  const router     = useRouter();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  useEffect(() => { if (session) router.replace('/'); }, [session]);
+  useEffect(() => { if (status === 'authenticated') router.replace('/'); }, [status]);
 
-  async function handleLogin(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    if (!email.trim() || !password) { setError('Please enter your email/phone and password.'); return; }
     setLoading(true);
     setError('');
-    const result = await signIn('credentials', { email, password, redirect: false });
-    if (result?.error) { setError('Incorrect email or password.'); setLoading(false); }
-    else router.replace('/');
+    try {
+      const result = await signIn('credentials', { email: email.trim(), password, redirect: false });
+      if (result?.error) {
+        setError('Incorrect credentials. Please check your email/phone and password.');
+      } else if (result?.ok) {
+        router.replace('/');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } catch(e) {
+      setError('Connection error. Please try again.');
+    }
+    setLoading(false);
   }
 
-  const iStyle = { width:'100%', background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.13)', borderRadius:10, padding:'11px 14px', fontSize:'.88rem', color:'#F0EFFF', fontFamily:'Inter,sans-serif', outline:'none', transition:'border .18s', marginBottom:12 };
-
   return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#09090F', padding:16 }}>
-      <div style={{ position:'fixed', top:'20%', left:'50%', transform:'translateX(-50%)', width:600, height:300, background:'radial-gradient(ellipse,rgba(124,92,252,.2) 0%,transparent 70%)', pointerEvents:'none', filter:'blur(40px)' }} />
-      <div className="scale-in" style={{ background:'#16161F', border:'1px solid rgba(255,255,255,.1)', borderRadius:24, padding:'40px 36px', width:'100%', maxWidth:400, position:'relative', zIndex:1 }}>
-        <div style={{ textAlign:'center', marginBottom:28 }}>
-          <div style={{ width:56, height:56, borderRadius:16, background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.6rem', margin:'0 auto 16px' }}>⚡</div>
-          <h1 style={{ fontSize:'1.5rem', fontWeight:900, color:'#F0EFFF', marginBottom:6 }}>Your Socials OS</h1>
-          <p style={{ fontSize:'.82rem', color:'#9090AA', lineHeight:1.5 }}>Sign in with your team credentials</p>
+    <div style={{ minHeight:'100dvh', background:'#09090F', display:'flex', alignItems:'center', justifyContent:'center', padding:20, fontFamily:'Inter,sans-serif' }}>
+      <div style={{ width:'100%', maxWidth:400 }}>
+        {/* Logo */}
+        <div style={{ textAlign:'center', marginBottom:36 }}>
+          <img src="/logo.png" alt="Your Socials" style={{ height:48, objectFit:'contain', marginBottom:20 }}/>
+          <h1 style={{ fontSize:'1.4rem', fontWeight:900, color:'#F0EFFF', marginBottom:8 }}>Welcome back</h1>
+          <p style={{ fontSize:'.85rem', color:'#9090AA', lineHeight:1.5 }}>Sign in with your team credentials</p>
         </div>
 
-        {error && (
-          <div style={{ background:'rgba(255,77,109,.1)', border:'1px solid rgba(255,77,109,.3)', borderRadius:10, padding:'10px 14px', fontSize:'.8rem', color:'#FF4D6D', marginBottom:16, textAlign:'center' }}>
-            {error}
+        <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div>
+            <label style={{ fontSize:'.75rem', fontWeight:600, color:'#9090AA', letterSpacing:'.04em', display:'block', marginBottom:6 }}>EMAIL OR PHONE</label>
+            <input
+              type="text"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@yoursocials.in or +91 98765"
+              required
+              autoComplete="username"
+              style={iStyle}
+              onFocus={e => e.target.style.borderColor='#7C5CFC'}
+              onBlur={e => e.target.style.borderColor='rgba(255,255,255,.13)'}
+            />
           </div>
-        )}
 
-        <form onSubmit={handleLogin}>
-          <div style={{ fontSize:'.72rem', fontWeight:600, color:'#9090AA', marginBottom:5, letterSpacing:'.04em' }}>Email or Phone</div>
-          <input type="text" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@yoursocials.in or +91 98765 43210" required style={iStyle} onFocus={e=>e.target.style.borderColor='#7C5CFC'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'} />
-          <div style={{ fontSize:'.72rem', fontWeight:600, color:'#9090AA', marginBottom:5, letterSpacing:'.04em' }}>Password</div>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" required style={iStyle} onFocus={e=>e.target.style.borderColor='#7C5CFC'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.13)'} />
-          <button type="submit" disabled={loading} style={{ width:'100%', padding:'12px', background:'linear-gradient(135deg,#7C5CFC,#FF5FA0)', border:'none', borderRadius:10, fontSize:'.9rem', fontWeight:700, color:'#fff', cursor:loading?'not-allowed':'pointer', marginTop:4, opacity:loading?.7:1, fontFamily:'Inter,sans-serif', transition:'opacity .18s' }}>
-            {loading ? 'Signing in…' : 'Sign In →'}
+          <div>
+            <label style={{ fontSize:'.75rem', fontWeight:600, color:'#9090AA', letterSpacing:'.04em', display:'block', marginBottom:6 }}>PASSWORD</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              autoComplete="current-password"
+              style={iStyle}
+              onFocus={e => e.target.style.borderColor='#7C5CFC'}
+              onBlur={e => e.target.style.borderColor='rgba(255,255,255,.13)'}
+            />
+          </div>
+
+          {error && (
+            <div style={{ background:'rgba(255,77,109,.1)', border:'1px solid rgba(255,77,109,.3)', borderRadius:10, padding:'10px 14px', fontSize:'.8rem', color:'#FF4D6D', lineHeight:1.5 }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <button type="submit" disabled={loading}
+            style={{ width:'100%', padding:'13px', background: loading ? 'rgba(124,92,252,.5)' : 'linear-gradient(135deg,#7C5CFC,#FF5FA0)', border:'none', borderRadius:12, color:'#fff', fontSize:'.95rem', fontWeight:700, cursor: loading ? 'wait' : 'pointer', fontFamily:'Inter,sans-serif', marginTop:4, transition:'opacity .2s' }}>
+            {loading ? '⏳ Signing in…' : 'Sign In →'}
           </button>
         </form>
 
-        <div style={{ marginTop:20, padding:'14px', background:'rgba(124,92,252,.08)', border:'1px solid rgba(124,92,252,.2)', borderRadius:10, fontSize:'.75rem', color:'#9090AA', textAlign:'center', lineHeight:1.6 }}>
-          🔐 Accounts are created by your admin.<br/>Contact your team lead if you need access.
-        </div>
+        <p style={{ textAlign:'center', fontSize:'.75rem', color:'#6B6B8A', marginTop:24 }}>
+          Contact your admin if you need access
+        </p>
       </div>
     </div>
   );
