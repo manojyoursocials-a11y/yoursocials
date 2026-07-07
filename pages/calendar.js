@@ -59,6 +59,10 @@ export default function Calendar() {
   const [editingPost, setEditingPost] = useState(null);
   const [postForm,    setPostForm]    = useState(blankPost());
   const [detailPost,  setDetailPost]  = useState(null);
+  const [importModal, setImportModal] = useState(false);
+  const [importData,  setImportData]  = useState([]); // parsed rows
+  const [importing,   setImporting]   = useState(false);
+  const [importError, setImportError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +176,212 @@ export default function Calendar() {
     toast.info('Post deleted');
     setDetailPost(null);
     loadMonthPosts(curDate);
+  }
+
+  // ── EXPORT ──────────────────────────────────────────────────
+  function exportCSV(calIdOverride) {
+    const calId = calIdOverride || activeCalId;
+    const targetPosts = calId === 'all' ? filteredPosts : filteredPosts.filter(p => p.calendar_id === calId);
+    const cal = calendars.find(c => c.id === calId);
+    const calName = cal ? cal.name : 'All-Calendars';
+    const monthLabel = `${MONTHS[curDate.getMonth()]}-${curDate.getFullYear()}`;
+
+    const header = ['Calendar','Title','Platform','Content Type','Status','Publish Date','Publish Time','Assigned To','Topic Tags','Target Audience','Content Description','Notes','Reference Links'];
+    const rows = targetPosts.map(p => {
+      const tags  = (() => { try { return JSON.parse(p.topic_tags||'[]').join(', '); } catch { return ''; } })();
+      const links = (() => { try { return JSON.parse(p.links||'[]').join(' | '); } catch { return ''; } })();
+      const status = STATUS_CONFIG[p.status]?.label || p.status;
+      return [
+        p.calendar_name || calName,
+        p.title,
+        p.platform || '',
+        p.content_type || '',
+        status,
+        p.publish_date ? String(p.publish_date).slice(0,10) : '',
+        p.publish_time || '',
+        p.assignee_name || '',
+        tags,
+        p.target_audience || '',
+        p.content_description || '',
+        p.notes || '',
+        links,
+      ];
+    });
+
+    const csv = [header, ...rows].map(row =>
+      row.map(cell => '"' + String(cell||'').replace(/"/g,'""') + '"').join(',')
+    ).join('
+');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${calName.replace(/[^a-z0-9]/gi,'-')}-${monthLabel}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${targetPosts.length} posts as CSV 📥`);
+  }
+
+  function downloadTemplate() {
+    const header = ['Calendar Name','Title','Platform','Content Type','Status','Publish Date (YYYY-MM-DD)','Publish Time (HH:MM)','Assigned To (Name)','Topic Tags (comma separated)','Target Audience','Content Description','Notes','Reference Links (pipe separated)'];
+    const example = [
+      calendars[0]?.name || 'Brand Name',
+      'Summer Sale Reel',
+      'Instagram',
+      'Reel',
+      'Planning',
+      `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}-15`,
+      '09:00',
+      '',
+      'summer, sale, fashion',
+      'Women 25-40 Chennai',
+      'Show the new summer collection with trending audio',
+      'Use bright colors, energetic vibe',
+      'https://drive.google.com/file | https://figma.com/file',
+    ];
+    const csv = [header, example].map(row =>
+      row.map(cell => '"' + String(cell||'').replace(/"/g,'""') + '"').join(',')
+    ).join('
+');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `calendar-import-template.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.info('Template downloaded — fill it in and import');
+  }
+
+  function parseCSV(text) {
+    const lines = text.trim().split('
+');
+    if (lines.length < 2) return [];
+    // Parse CSV respecting quoted fields
+    function parseLine(line) {
+      const result = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+          else inQ = !inQ;
+        } else if (ch === ',' && !inQ) {
+          result.push(cur.trim()); cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g,''));
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const vals = parseLine(lines[i]);
+      const row  = {};
+      headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError('');
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const rows = parseCSV(ev.target.result);
+        if (!rows.length) { setImportError('No data rows found in file'); return; }
+        setImportData(rows);
+      } catch(err) {
+        setImportError('Could not parse file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  async function runImport() {
+    if (!importData.length) return;
+    setImporting(true);
+    let successCount = 0, errorCount = 0;
+
+    for (const row of importData) {
+      try {
+        // Match calendar by name (case-insensitive)
+        const calName = row['calendarname'] || row['calendar'] || '';
+        const matchedCal = calendars.find(cal =>
+          cal.name.toLowerCase() === calName.toLowerCase()
+        ) || (activeCalId !== 'all' ? calendars.find(c=>c.id===activeCalId) : calendars[0]);
+
+        if (!matchedCal) { errorCount++; continue; }
+
+        // Match assignee by name
+        const assigneeName = row['assignedtoname'] || row['assignedto'] || '';
+        const matchedMember = members.find(m =>
+          (m.name||'').toLowerCase() === assigneeName.toLowerCase()
+        );
+
+        // Parse status
+        const statusInput = (row['status'] || 'planning').toLowerCase().replace(/ /g,'_');
+        const validStatuses = Object.keys(STATUS_CONFIG);
+        const statusMap = { 'in_progress':'in_progress', 'inprogress':'in_progress', 'planning':'planning', 'review':'review', 'approved':'approved', 'scheduled':'scheduled', 'live':'live', 'cancelled':'cancelled' };
+        const status = statusMap[statusInput] || (validStatuses.find(s => STATUS_CONFIG[s].label.toLowerCase() === statusInput.replace(/_/g,' '))) || 'planning';
+
+        // Parse platform
+        const platformInput = row['platform'] || 'Instagram';
+        const platform = PLATFORMS.find(p => p.toLowerCase() === platformInput.toLowerCase()) || platformInput || 'Instagram';
+
+        // Parse content type
+        const ctInput = row['contenttype'] || row['type'] || 'Reel';
+        const content_type = CONTENT_TYPES.find(t => t.toLowerCase() === ctInput.toLowerCase()) || ctInput || 'Reel';
+
+        // Tags
+        const tagsRaw = row['topictagscommaseparated'] || row['topictags'] || row['tags'] || '';
+        const topic_tags = JSON.stringify(tagsRaw.split(',').map(t=>t.trim()).filter(Boolean));
+
+        // Links
+        const linksRaw = row['referencelinks'] || row['links'] || '';
+        const links = JSON.stringify(linksRaw.split('|').map(l=>l.trim()).filter(Boolean));
+
+        const payload = {
+          type:                'post',
+          calendar_id:         matchedCal.id,
+          title:               row['title'] || 'Imported Post',
+          platform,
+          content_type,
+          status,
+          publish_date:        row['publishdateyyymmdd'] || row['publishdate'] || row['date'] || '',
+          publish_time:        row['publishtimehhmm'] || row['publishtime'] || row['time'] || '09:00',
+          assigned_to:         matchedMember?.id || null,
+          topic_tags,
+          target_audience:     row['targetaudience'] || '',
+          content_description: row['contentdescription'] || row['description'] || '',
+          notes:               row['notes'] || '',
+          links,
+        };
+
+        const result = await req('/api/calendar', 'POST', payload);
+        if (result.error) errorCount++;
+        else successCount++;
+      } catch(e) {
+        errorCount++;
+      }
+    }
+
+    setImporting(false);
+    setImportModal(false);
+    setImportData([]);
+    loadMonthPosts(curDate);
+
+    if (successCount > 0) toast.success(`Imported ${successCount} posts successfully! 🎉`);
+    if (errorCount > 0)   toast.error(`${errorCount} rows had errors (missing calendar match)`);
   }
 
   // ── CALENDAR GRID ────────────────────────────────────────────
@@ -313,6 +523,35 @@ export default function Calendar() {
               ))}
             </div>
 
+            {/* Export/Import buttons */}
+            <div style={{display:'flex',gap:6}}>
+              <div style={{position:'relative',display:'inline-block'}}>
+                <button
+                  style={{padding:'7px 14px',background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:10,color:'var(--muted2)',fontSize:'.8rem',fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:6}}
+                  onClick={e=>{e.currentTarget.nextSibling.style.display=e.currentTarget.nextSibling.style.display==='block'?'none':'block';}}>
+                  📥 Export ▾
+                </button>
+                <div style={{display:'none',position:'absolute',top:'calc(100% + 6px)',right:0,background:'var(--surface2)',border:'1px solid var(--border2)',borderRadius:12,padding:8,zIndex:100,minWidth:200,boxShadow:'var(--shadow-lg)'}}>
+                  <div style={{fontSize:'.68rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',padding:'4px 10px 8px',letterSpacing:'.08em'}}>
+                    {MONTHS[curDate.getMonth()]} {curDate.getFullYear()}
+                  </div>
+                  <button onClick={()=>exportCSV('all')} style={{display:'block',width:'100%',padding:'8px 12px',background:'none',border:'none',borderRadius:8,color:'var(--text)',fontSize:'.82rem',cursor:'pointer',textAlign:'left',fontFamily:'Inter,sans-serif'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                    📊 All Calendars
+                  </button>
+                  {calendars.map(cal=>(
+                    <button key={cal.id} onClick={()=>exportCSV(cal.id)} style={{display:'block',width:'100%',padding:'8px 12px',background:'none',border:'none',borderRadius:8,color:'var(--text)',fontSize:'.82rem',cursor:'pointer',textAlign:'left',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:8}}
+                      onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                      <div style={{width:10,height:10,borderRadius:3,background:cal.color,flexShrink:0}}/>
+                      {cal.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Btn variant="ghost" onClick={()=>{setImportData([]);setImportError('');setImportModal(true);}}>📤 Import</Btn>
+            </div>
             <Btn onClick={()=>openNewPost(selectedDay||todayStr)}>+ New Post</Btn>
           </div>
 
@@ -562,6 +801,111 @@ export default function Calendar() {
             </>
           );
         })()}
+      </Modal>
+
+      {/* ── IMPORT MODAL ──────────────────────────────── */}
+      <Modal open={importModal} onClose={()=>{setImportModal(false);setImportData([]);setImportError('');}} title="📤 Import Calendar Posts" width={560}>
+        {/* Step 1: Download template */}
+        <div style={{padding:'14px 16px',background:'rgba(0,212,255,.06)',border:'1px solid rgba(0,212,255,.2)',borderRadius:12,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:'.85rem',marginBottom:6}}>Step 1 — Download the template</div>
+          <div style={{fontSize:'.78rem',color:'var(--muted2)',marginBottom:12,lineHeight:1.6}}>
+            Download the CSV template, fill in your posts for any brand, then import it back. One row = one post.
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <Btn variant="ghost" size="sm" onClick={downloadTemplate}>📥 Download Template CSV</Btn>
+          </div>
+        </div>
+
+        {/* Template column guide */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:'.7rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Template Columns</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+            {[
+              ['Calendar Name','Must match an existing calendar name'],
+              ['Title','Post title (required)'],
+              ['Platform','Instagram, Facebook, etc.'],
+              ['Content Type','Reel, Story, Carousel, etc.'],
+              ['Status','Planning, Live, Scheduled, etc.'],
+              ['Publish Date','Format: YYYY-MM-DD'],
+              ['Publish Time','Format: HH:MM (e.g. 09:00)'],
+              ['Assigned To (Name)','Team member name'],
+              ['Topic Tags','Comma separated tags'],
+              ['Target Audience','e.g. Women 25-40'],
+              ['Content Description','Caption/content plan'],
+              ['Notes','Internal notes'],
+              ['Reference Links','Pipe ( | ) separated URLs'],
+            ].map(([col, hint]) => (
+              <div key={col} style={{padding:'5px 8px',background:'var(--surface3)',borderRadius:7}}>
+                <div style={{fontSize:'.7rem',fontWeight:700,color:'var(--text)'}}>{col}</div>
+                <div style={{fontSize:'.63rem',color:'var(--muted)'}}>{hint}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Step 2: Upload */}
+        <div style={{padding:'14px 16px',background:'rgba(124,92,252,.06)',border:'1px solid rgba(124,92,252,.2)',borderRadius:12,marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:'.85rem',marginBottom:10}}>Step 2 — Upload your filled CSV</div>
+          <label style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'var(--surface3)',border:'2px dashed rgba(124,92,252,.4)',borderRadius:10,cursor:'pointer',transition:'border-color .15s'}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor='var(--purple)'}
+            onMouseLeave={e=>e.currentTarget.style.borderColor='rgba(124,92,252,.4)'}>
+            <span style={{fontSize:'1.5rem'}}>📂</span>
+            <div>
+              <div style={{fontSize:'.82rem',fontWeight:600,color:'var(--text)'}}>
+                {importData.length > 0 ? `✅ ${importData.length} rows ready to import` : 'Choose CSV file'}
+              </div>
+              <div style={{fontSize:'.72rem',color:'var(--muted)'}}>
+                {importData.length > 0 ? 'Click to choose a different file' : 'Click to browse or drag & drop'}
+              </div>
+            </div>
+            <input type="file" accept=".csv,text/csv" style={{display:'none'}} onChange={handleImportFile}/>
+          </label>
+          {importError && <div style={{fontSize:'.78rem',color:'var(--red)',marginTop:8,padding:'7px 10px',background:'rgba(255,77,109,.08)',borderRadius:8}}>⚠️ {importError}</div>}
+        </div>
+
+        {/* Preview rows */}
+        {importData.length > 0 && (
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:'.7rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>
+              Preview — First {Math.min(5, importData.length)} of {importData.length} rows
+            </div>
+            <div style={{maxHeight:200,overflowY:'auto',border:'1px solid var(--border)',borderRadius:10}}>
+              {importData.slice(0,5).map((row, i) => {
+                const calName = row['calendarname'] || row['calendar'] || '';
+                const matchedCal = calendars.find(cal => cal.name.toLowerCase() === calName.toLowerCase());
+                return (
+                  <div key={i} style={{padding:'9px 12px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,background:matchedCal?'transparent':'rgba(255,77,109,.04)'}}>
+                    {matchedCal
+                      ? <div style={{width:8,height:8,borderRadius:3,background:matchedCal.color,flexShrink:0}}/>
+                      : <span style={{fontSize:'.7rem',color:'var(--red)'}}>⚠️</span>
+                    }
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:'.8rem',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row['title'] || '(no title)'}</div>
+                      <div style={{fontSize:'.68rem',color:'var(--muted)',marginTop:1}}>
+                        {matchedCal ? matchedCal.name : <span style={{color:'var(--red)'}}>Calendar not found: "{calName}"</span>}
+                        {row['publishdate']||row['publishdateyyymmdd'] ? ` · ${row['publishdate']||row['publishdateyyymmdd']}` : ''}
+                        {row['platform'] ? ` · ${row['platform']}` : ''}
+                      </div>
+                    </div>
+                    <span style={{fontSize:'.68rem',background:'rgba(255,255,255,.06)',color:'var(--muted)',padding:'2px 7px',borderRadius:20,flexShrink:0}}>{row['status']||'planning'}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {importData.some(row => !calendars.find(cal => cal.name.toLowerCase() === (row['calendarname']||row['calendar']||'').toLowerCase())) && (
+              <div style={{fontSize:'.75rem',color:'var(--orange)',marginTop:8,padding:'7px 10px',background:'rgba(255,159,67,.08)',borderRadius:8}}>
+                ⚠️ Rows with unmatched calendar names will use the first available calendar or be skipped.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{display:'flex',gap:10}}>
+          <Btn variant="ghost" onClick={()=>{setImportModal(false);setImportData([]);setImportError('');}} style={{flex:1}}>Cancel</Btn>
+          <Btn onClick={runImport} disabled={importing||importData.length===0} style={{flex:2,opacity:importData.length===0?.5:1}}>
+            {importing ? '⏳ Importing…' : `📤 Import ${importData.length} Posts`}
+          </Btn>
+        </div>
       </Modal>
 
       <style>{`

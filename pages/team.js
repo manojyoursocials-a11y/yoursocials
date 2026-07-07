@@ -34,7 +34,9 @@ export default function Team() {
   }
 
   function openEditProfile() {
-    setForm({ job_title: session?.user?.job_title || '', image: session?.user?.image || '' });
+    // Find own profile from members list (which has the DB image)
+    const me = members.find(m => m.email === session?.user?.email);
+    setForm({ job_title: session?.user?.job_title || me?.job_title || '', image: me?.image || '' });
     setModal(true);
   }
 
