@@ -24,6 +24,15 @@ const COLS = [
   { id:'done',       label:'Done',         emoji:'✅', color:'#00E5A0' },
 ];
 const PRI = { P1:'🔴 Critical', P2:'🟠 High', P3:'🟡 Medium', P4:'🟢 Low' };
+
+const TASK_CONTENT_TYPES = {
+  'Post':           { color:'#00D4FF', bg:'rgba(0,212,255,.15)',  emoji:'🖼️' },
+  'Story':          { color:'#FFD60A', bg:'rgba(255,214,10,.15)', emoji:'📸' },
+  'Carousel Post':  { color:'#7C5CFC', bg:'rgba(124,92,252,.15)',emoji:'🔄' },
+  'Reel':           { color:'#FF5FA0', bg:'rgba(255,95,160,.15)', emoji:'🎬' },
+  'Print':          { color:'#FF9F43', bg:'rgba(255,159,67,.15)', emoji:'🖨️' },
+  'Others':         { color:'#9090AA', bg:'rgba(144,144,170,.15)',emoji:'📌' },
+};
 const blank = () => ({ title:'', description:'', priority:'P3', owner_id:'', client_id:'', deadline:'', post_date:'', estimated_hours:'' });
 const toUrl = s => s && !s.startsWith('http') ? 'https://'+s : s;
 
@@ -163,6 +172,7 @@ export default function Tasks() {
       deadline:        task.deadline ? String(task.deadline).slice(0,10) : '',
       post_date:       task.post_date ? String(task.post_date).slice(0,10) : '',
       estimated_hours: task.estimated_hours || '',
+      content_type:    task.content_type || '',
     });
     try { setLinks(JSON.parse(task.links || '[]')); } catch { setLinks([]); }
     try { setChecks(JSON.parse(task.ai_checklist || '[]')); } catch { setChecks([]); }
@@ -186,6 +196,7 @@ export default function Tasks() {
       deadline:        form.deadline || null,
       post_date:       form.post_date || null,
       estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
+      content_type:    form.content_type || null,
       ai_checklist:    JSON.stringify(checks),
     };
     const res = editing
@@ -521,6 +532,19 @@ export default function Tasks() {
             <option value="">Internal / No client</option>
             {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
+          {/* Content Type selector */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:'.73rem',fontWeight:600,color:'var(--muted2)',marginBottom:8,letterSpacing:'.04em'}}>CONTENT TYPE</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {Object.entries(TASK_CONTENT_TYPES).map(([type,cfg])=>(
+                <button key={type} type="button" onClick={()=>setForm(f=>({...f,content_type:form.content_type===type?'':type}))}
+                  style={{padding:'7px 12px',borderRadius:9,border:`1.5px solid ${form.content_type===type?cfg.color:'rgba(255,255,255,.08)'}`,background:form.content_type===type?cfg.bg:'rgba(255,255,255,.02)',color:form.content_type===type?cfg.color:'var(--muted2)',fontSize:'.78rem',fontWeight:form.content_type===type?700:500,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}>
+                  <span>{cfg.emoji}</span>{type}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
             <Input label="Post Date 📤" type="date" value={form.post_date} onChange={e=>setForm(f=>({...f,post_date:e.target.value}))}/>
             <Input label="Deadline ⏰" type="date" value={form.deadline} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))}/>

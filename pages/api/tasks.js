@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
   // ── POST — Create task ─────────────────────────────────────
   if (req.method === 'POST') {
-    const { title, description, links, priority, owner_id, client_id, deadline, post_date, estimated_hours, ai_checklist } = req.body;
+    const { title, description, links, priority, owner_id, client_id, deadline, post_date, content_type, estimated_hours, ai_checklist } = req.body;
     if (!title) return res.status(400).json({ error: 'Title required' });
 
     const assigneeId = owner_id || userId;
@@ -54,6 +54,7 @@ export default async function handler(req, res) {
       links:          typeof links === 'string' ? links : JSON.stringify(links || []),
       media:          typeof req.body.media === 'string' ? req.body.media : JSON.stringify(req.body.media || []),
       priority:       priority || 'P3',
+      content_type:   content_type || null,
       owner_id:       assigneeId,
       client_id:      client_id || null,
       deadline:       deadline || null,

@@ -27,7 +27,19 @@ const STATUS_CONFIG = {
   cancelled:   { label:'Cancelled',   color:'#FF4D6D', bg:'rgba(255,77,109,.15)',   emoji:'❌' },
 };
 const PLATFORMS     = ['Instagram','Facebook','Twitter/X','LinkedIn','YouTube','TikTok','Pinterest','Snapchat','WhatsApp','Email','Website','Other'];
-const CONTENT_TYPES = ['Reel','Story','Carousel','Static Post','Video','Blog','Newsletter','Ad Creative','UGC','Infographic','Other'];
+const CONTENT_TYPES = {
+  'Reel':         { color:'#FF5FA0', bg:'rgba(255,95,160,.15)',  emoji:'🎬' },
+  'Story':        { color:'#FFD60A', bg:'rgba(255,214,10,.15)',  emoji:'📸' },
+  'Carousel':     { color:'#7C5CFC', bg:'rgba(124,92,252,.15)', emoji:'🔄' },
+  'Static Post':  { color:'#00D4FF', bg:'rgba(0,212,255,.15)',  emoji:'🖼️' },
+  'Video':        { color:'#FF9F43', bg:'rgba(255,159,67,.15)', emoji:'🎥' },
+  'Blog':         { color:'#00E5A0', bg:'rgba(0,229,160,.15)',  emoji:'📝' },
+  'Newsletter':   { color:'#A78BFA', bg:'rgba(167,139,250,.15)' ,emoji:'📧' },
+  'Ad Creative':  { color:'#FF4D6D', bg:'rgba(255,77,109,.15)', emoji:'📢' },
+  'UGC':          { color:'#34D399', bg:'rgba(52,211,153,.15)', emoji:'👤' },
+  'Infographic':  { color:'#60A5FA', bg:'rgba(96,165,250,.15)', emoji:'📊' },
+  'Other':        { color:'#9090AA', bg:'rgba(144,144,170,.15)',emoji:'📌' },
+};
 const CAL_COLORS    = ['#7C5CFC','#FF5FA0','#00D4FF','#FFD60A','#00E5A0','#FF9F43','#FF4D6D','#A78BFA','#34D399','#60A5FA'];
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -462,7 +474,7 @@ export default function Calendar() {
                           return (
                             <div key={p.id} onClick={e => { e.stopPropagation(); setDetailPost(p); }}
                               style={{ padding: isMobile ? '1px 3px' : '3px 7px', borderRadius: isMobile ? 3 : 5, background: color+'22', borderLeft: `${isMobile?2:3}px solid ${color}`, marginBottom: isMobile ? 2 : 3, fontSize: isMobile ? '.56rem' : '.68rem', fontWeight:600, color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer' }}>
-                              {sc.emoji} {p.title}
+                              {(()=>{const ct=CONTENT_TYPES[p.content_type];return ct?<span style={{marginRight:2}}>{ct.emoji}</span>:null;})()}{sc.emoji} {p.title}
                             </div>
                           );
                         })}
@@ -514,6 +526,7 @@ export default function Calendar() {
                             <div style={{ fontWeight:700, fontSize:'.88rem', marginBottom:3 }}>{p.title}</div>
                             <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
                               {p.platform && <span style={{ fontSize:'.7rem', background:'rgba(255,255,255,.07)', color:'var(--muted2)', padding:'1px 7px', borderRadius:20 }}>{p.platform}</span>}
+                              {p.content_type && (()=>{const ct=CONTENT_TYPES[p.content_type]||CONTENT_TYPES['Other'];return <span style={{fontSize:'.7rem',background:ct.bg,color:ct.color,padding:'1px 7px',borderRadius:20,fontWeight:600}}>{ct.emoji} {p.content_type}</span>})()}
                               {p.publish_time && <span style={{ fontSize:'.7rem', color:'var(--cyan)' }}>⏰ {p.publish_time}</span>}
                               {tags.slice(0,3).map(t => <span key={t} style={{ fontSize:'.67rem', background:color+'22', color, padding:'1px 6px', borderRadius:20 }}>#{t}</span>)}
                             </div>
@@ -570,9 +583,17 @@ export default function Calendar() {
           <Select label="Platform" value={postForm.platform} onChange={e => setPostForm(f => ({...f, platform:e.target.value}))}>
             {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
           </Select>
-          <Select label="Content Type" value={postForm.content_type} onChange={e => setPostForm(f => ({...f, content_type:e.target.value}))}>
-            {CONTENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </Select>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:'.73rem',fontWeight:600,color:'var(--muted2)',marginBottom:8,letterSpacing:'.04em'}}>CONTENT TYPE</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:6}}>
+              {Object.entries(CONTENT_TYPES).map(([type,cfg])=>(
+                <button key={type} type="button" onClick={()=>setPostForm(f=>({...f,content_type:type}))}
+                  style={{padding:'7px 10px',borderRadius:9,border:`1.5px solid ${postForm.content_type===type?cfg.color:'rgba(255,255,255,.08)'}`,background:postForm.content_type===type?cfg.bg:'rgba(255,255,255,.02)',color:postForm.content_type===type?cfg.color:'var(--muted2)',fontSize:'.75rem',fontWeight:postForm.content_type===type?700:500,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
+                  <span>{cfg.emoji}</span>{type}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
           <Input label="Publish Date" type="date" value={postForm.publish_date} onChange={e => setPostForm(f => ({...f, publish_date:e.target.value}))}/>
@@ -607,7 +628,7 @@ export default function Calendar() {
                 <span style={{ background:sc.bg, color:sc.color, fontSize:'.75rem', fontWeight:700, padding:'4px 12px', borderRadius:20 }}>{sc.emoji} {sc.label}</span>
                 {cal && <span style={{ background:color+'22', color, fontSize:'.75rem', fontWeight:700, padding:'4px 12px', borderRadius:20 }}>📅 {cal.name}</span>}
                 {detailPost.platform && <span style={{ background:'rgba(255,255,255,.07)', color:'var(--muted2)', fontSize:'.75rem', padding:'4px 12px', borderRadius:20 }}>{detailPost.platform}</span>}
-                {detailPost.content_type && <span style={{ background:'rgba(255,255,255,.05)', color:'var(--muted)', fontSize:'.73rem', padding:'4px 10px', borderRadius:20 }}>{detailPost.content_type}</span>}
+                {detailPost.content_type && (()=>{const ct=CONTENT_TYPES[detailPost.content_type]||CONTENT_TYPES['Other'];return(<span style={{background:ct.bg,color:ct.color,fontSize:'.75rem',fontWeight:700,padding:'4px 12px',borderRadius:20}}>{ct.emoji} {detailPost.content_type}</span>);})()}
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
                 <div style={{ padding:'10px 12px', background:'var(--surface3)', borderRadius:10 }}>
