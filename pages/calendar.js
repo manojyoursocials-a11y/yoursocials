@@ -454,6 +454,15 @@ export default function Calendar() {
               <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border)', background:'var(--surface2)', position:'sticky', top:0, zIndex:10 }}>
                 {DAYS.map(d => <div key={d} style={{ padding: isMobile ? '8px 4px' : '10px 12px', fontSize: isMobile ? '.62rem' : '.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', textAlign:'center' }}>{isMobile ? d[0] : d}</div>)}
               </div>
+              {/* Content type legend */}
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', padding:'8px 12px', background:'var(--surface)', borderBottom:'1px solid var(--border)', alignItems:'center' }}>
+                <span style={{ fontSize:'.62rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', marginRight:4 }}>Types:</span>
+                {Object.entries(CONTENT_TYPES).map(([type, cfg]) => (
+                  <span key={type} style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:'.65rem', fontWeight:600, color:cfg.color, background:cfg.bg, padding:'2px 7px', borderRadius:20, whiteSpace:'nowrap' }}>
+                    {cfg.emoji} {type}
+                  </span>
+                ))}
+              </div>
               {grid.map((week, wi) => (
                 <div key={wi} style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border)', minHeight: isMobile ? 70 : 120 }}>
                   {week.map((cell, ci) => {
@@ -468,13 +477,18 @@ export default function Calendar() {
                           </span>
                         </div>
                         {cell.posts.slice(0, isMobile?2:3).map(p => {
-                          const cal   = calendars.find(c => c.id === p.calendar_id);
-                          const sc    = STATUS_CONFIG[p.status] || STATUS_CONFIG.planning;
-                          const color = cal?.color || '#7C5CFC';
+                          const cal     = calendars.find(c => c.id === p.calendar_id);
+                          const sc      = STATUS_CONFIG[p.status] || STATUS_CONFIG.planning;
+                          const calColor = cal?.color || '#7C5CFC';
+                          const ct      = CONTENT_TYPES[p.content_type];
+                          // Content type color drives the pill; calendar color is the left border
+                          const pillColor = ct ? ct.color : calColor;
+                          const pillBg    = ct ? ct.bg    : calColor+'22';
                           return (
                             <div key={p.id} onClick={e => { e.stopPropagation(); setDetailPost(p); }}
-                              style={{ padding: isMobile ? '1px 3px' : '3px 7px', borderRadius: isMobile ? 3 : 5, background: color+'22', borderLeft: `${isMobile?2:3}px solid ${color}`, marginBottom: isMobile ? 2 : 3, fontSize: isMobile ? '.56rem' : '.68rem', fontWeight:600, color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer' }}>
-                              {(()=>{const ct=CONTENT_TYPES[p.content_type];return ct?<span style={{marginRight:2}}>{ct.emoji}</span>:null;})()}{sc.emoji} {p.title}
+                              title={`${p.content_type||''} · ${p.title}`}
+                              style={{ padding: isMobile ? '1px 3px' : '3px 7px', borderRadius: isMobile ? 3 : 5, background: pillBg, borderLeft: `${isMobile?2:3}px solid ${calColor}`, marginBottom: isMobile ? 2 : 3, fontSize: isMobile ? '.56rem' : '.68rem', fontWeight:600, color: pillColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer', transition:'opacity .12s' }}>
+                              {ct && <span style={{marginRight:2}}>{ct.emoji}</span>}{p.title}
                             </div>
                           );
                         })}
@@ -517,7 +531,7 @@ export default function Calendar() {
                     const tags  = (() => { try { return JSON.parse(p.topic_tags||'[]'); } catch { return []; } })();
                     return (
                       <div key={p.id} onClick={() => setDetailPost(p)}
-                        style={{ padding:'12px 14px', background:'var(--surface2)', border:'1px solid var(--border)', borderLeft:`4px solid ${color}`, borderRadius:10, marginBottom:8, cursor:'pointer', transition:'all .15s' }}
+                        style={{ padding:'12px 14px', background:'var(--surface2)', border:'1px solid var(--border)', borderLeft:`4px solid ${(()=>{const ct=CONTENT_TYPES[p.content_type];return ct?ct.color:color;})()}`, borderRadius:10, marginBottom:8, cursor:'pointer', transition:'all .15s' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.background = 'var(--surface3)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface2)'; }}>
                         <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
