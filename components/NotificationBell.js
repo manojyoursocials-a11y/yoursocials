@@ -2,44 +2,118 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 
 const TYPE_EMOJI = {
-  task_created:   '📋',
-  task_assigned:  '👤',
-  task_moved:     '⚡',
-  task_edited:    '✏️',
-  task_deleted:   '🗑',
+  task_created:    '📋',
+  task_assigned:   '👤',
+  task_moved:      '⚡',
+  task_edited:     '✏️',
+  task_deleted:    '🗑',
   followup_created:'📩',
-  followup_done:  '✅',
-  client_created: '🏢',
-  client_updated: '🏢',
-  client_deleted: '🏢',
-  default:        '🔔',
+  followup_done:   '✅',
+  client_created:  '🏢',
+  client_updated:  '🏢',
+  client_deleted:  '🏢',
+  default:         '🔔',
 };
 
-// Audio context singleton — only created after user interaction
+// ── Audio singleton ─────────────────────────────────────────────
 let _audio = null;
-let _userInteracted = false;
-
-// Track user interaction to unlock audio
+let _unlocked = false;
 if (typeof window !== 'undefined') {
-  const unlock = () => { _userInteracted = true; };
-  window.addEventListener('click', unlock, { once: false });
-  window.addEventListener('keydown', unlock, { once: false });
+  ['click','keydown','touchstart','touchend'].forEach(ev =>
+    window.addEventListener(ev, () => { _unlocked = true; }, { passive:true })
+  );
+}
+function playSound() {
+  if (!_unlocked) return;
+  try {
+    if (!_audio) { _audio = new Audio('/notification.mp3'); _audio.volume = 0.9; _audio.preload = 'auto'; }
+    _audio.currentTime = 0;
+    _audio.play().catch(() => { _audio = null; });
+  } catch(e) { _audio = null; }
 }
 
-async function playSound() {
+// ── Favicon badge ───────────────────────────────────────────────
+// Draws a red dot or count on the favicon when there are unread notifications
+let _originalFavicon = null;
+function updateFavicon(count) {
+  if (typeof document === 'undefined') return;
   try {
-    if (!_userInteracted) return; // can't play before interaction
-    if (!_audio) {
-      _audio = new Audio('/notification.mp3');
-      _audio.volume = 0.85;
-      _audio.preload = 'auto';
+    // Get or cache original favicon
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+
+    if (count === 0) {
+      // Restore original
+      link.href = _originalFavicon || '/favicon.ico';
+      return;
     }
-    _audio.currentTime = 0;
-    await _audio.play();
-  } catch (e) {
-    // Reset on error so next attempt creates fresh instance
-    _audio = null;
-  }
+
+    // Draw on a canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+
+    // Draw original favicon
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, 32, 32);
+      // Red badge circle
+      ctx.beginPath();
+      ctx.arc(26, 6, 8, 0, 2 * Math.PI);
+      ctx.fillStyle = '#FF4D6D';
+      ctx.fill();
+      // Count text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(count > 9 ? '9+' : String(count), 26, 6);
+      // Update favicon
+      if (!_originalFavicon) _originalFavicon = link.href;
+      link.href = canvas.toDataURL('image/png');
+    };
+    img.onerror = () => {
+      // If favicon load fails, just draw a red circle
+      ctx.beginPath();
+      ctx.arc(26, 6, 8, 0, 2 * Math.PI);
+      ctx.fillStyle = '#FF4D6D';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(count > 9 ? '9+' : String(count), 26, 6);
+      link.href = canvas.toDataURL('image/png');
+    };
+    img.src = _originalFavicon || '/favicon-32.png';
+  } catch(e) {}
+}
+
+// ── Page title badge ────────────────────────────────────────────
+let _originalTitle = null;
+function updateTitle(count) {
+  if (typeof document === 'undefined') return;
+  if (!_originalTitle) _originalTitle = document.title.replace(/^\(\d+\) /, '');
+  document.title = count > 0 ? `(${count}) ${_originalTitle}` : _originalTitle;
+}
+
+// ── Browser push notification ───────────────────────────────────
+function sendPush(title, body, tag) {
+  if (typeof window === 'undefined') return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(title, {
+      body,
+      icon:  '/favicon-32.png',
+      badge: '/favicon-32.png',
+      tag,
+      requireInteraction: false,
+      silent: false,
+    });
+    // Auto-close after 6 seconds
+    setTimeout(() => n.close(), 6000);
+  } catch(e) {}
 }
 
 function timeAgo(iso) {
@@ -52,35 +126,43 @@ function timeAgo(iso) {
   return Math.floor(h / 24) + 'd ago';
 }
 
+// ── Main component ──────────────────────────────────────────────
 export default function NotificationBell() {
   const { data: session, status } = useSession();
-  const [notifs,   setNotifs]   = useState([]);
-  const [unread,   setUnread]   = useState(0);
-  const [open,     setOpen]     = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [notifs,    setNotifs]    = useState([]);
+  const [unread,    setUnread]    = useState(0);
+  const [open,      setOpen]      = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [permState, setPermState] = useState('default');
 
-  // Use a timestamp 30 seconds in the past on first load
-  // so we catch any notifications created very recently
-  const sinceRef  = useRef(null);
-  const panelRef  = useRef(null);
-  const pollRef   = useRef(null);
+  const sinceRef   = useRef(null);
+  const panelRef   = useRef(null);
+  const pollRef    = useRef(null);
   const prevUnread = useRef(0);
 
-  // Ask for browser notification permission once
+  // Request push permission & set perm state
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    setPermState(Notification.permission);
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => setPermState(p));
     }
   }, []);
 
   // Close panel on outside click
   useEffect(() => {
-    const handler = e => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = e => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  // Fetch ALL notifications (called on panel open and on first load)
+  // Update favicon + title whenever unread count changes
+  useEffect(() => {
+    updateFavicon(unread);
+    updateTitle(unread);
+  }, [unread]);
+
+  // Fetch all notifications (on panel open)
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -88,118 +170,85 @@ export default function NotificationBell() {
       if (!r.ok) { setLoading(false); return; }
       const d = await r.json();
       setNotifs(Array.isArray(d.notifications) ? d.notifications : []);
-      setUnread(d.unread || 0);
-      prevUnread.current = d.unread || 0;
-    } catch (e) {}
+      const cnt = d.unread || 0;
+      setUnread(cnt);
+      prevUnread.current = cnt;
+    } catch(e) {}
     setLoading(false);
   }, []);
 
-  // Poll every 6 seconds for NEW notifications
+  // Poll every 5 seconds for new notifications
   const poll = useCallback(async () => {
     try {
       const since = sinceRef.current;
-      if (!since) return; // not ready yet
+      if (!since) return;
+
       const r = await fetch('/api/notifications?since=' + encodeURIComponent(since));
       if (!r.ok) return;
       const d = await r.json();
 
-      // Update sinceRef to now
       sinceRef.current = new Date().toISOString();
 
-      const newOnes = Array.isArray(d.notifications) ? d.notifications : [];
-      const newUnread = d.unread || 0;
+      const newOnes  = Array.isArray(d.notifications) ? d.notifications : [];
+      const newCount = d.unread || 0;
 
-      // There are NEW notifications since last poll
       if (newOnes.length > 0) {
-        // Add them to the top of the list
+        // Merge into list
         setNotifs(prev => {
-          const existing = new Set(prev.map(n => n.id));
-          const fresh = newOnes.filter(n => !existing.has(n.id));
-          if (fresh.length === 0) return prev;
-          return [...fresh, ...prev].slice(0, 50);
+          const ids   = new Set(prev.map(n => n.id));
+          const fresh = newOnes.filter(n => !ids.has(n.id));
+          return fresh.length === 0 ? prev : [...fresh, ...prev].slice(0, 60);
         });
-        setUnread(newUnread);
+        setUnread(newCount);
 
-        // Play sound only if unread count increased
-        if (newUnread > prevUnread.current) {
+        // If genuinely new (count went up) — alert the user
+        if (newCount > prevUnread.current) {
           playSound();
-
-          // Browser OS-level push notification
-          newOnes.forEach(n => {
-            try {
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(n.title, {
-                  body:  n.body,
-                  icon:  '/favicon-32.png',
-                  tag:   n.id,
-                  requireInteraction: false,
-                });
-              }
-            } catch (e) {}
-          });
+          newOnes.forEach(n => sendPush(n.title, n.body, n.id));
         }
 
-        prevUnread.current = newUnread;
-      } else if (newUnread !== prevUnread.current) {
-        // Unread count changed (e.g. marked read on another tab)
-        setUnread(newUnread);
-        prevUnread.current = newUnread;
+        prevUnread.current = newCount;
+      } else if (newCount !== prevUnread.current) {
+        setUnread(newCount);
+        prevUnread.current = newCount;
       }
-    } catch (e) {}
+    } catch(e) {}
   }, []);
 
-  // Start polling when authenticated
+  // Start polling when authenticated — every 5 seconds
   useEffect(() => {
     if (status !== 'authenticated') return;
-
-    // Set sinceRef to 30 seconds ago so we catch very recent notifications
-    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
-    sinceRef.current = thirtySecondsAgo;
-
-    // Load all existing notifications first
+    // Start 30s in the past to catch recent notifications
+    sinceRef.current = new Date(Date.now() - 30000).toISOString();
     fetchAll();
-
-    // Then poll for new ones every 6 seconds
-    pollRef.current = setInterval(poll, 6000);
+    pollRef.current = setInterval(poll, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [status, fetchAll, poll]);
 
+  // ── Actions ─────────────────────────────────────────────────
   async function markAllRead() {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true }),
-      });
-      setUnread(0);
-      prevUnread.current = 0;
-      setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+      await fetch('/api/notifications', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ all:true }) });
+      setUnread(0); prevUnread.current = 0;
+      setNotifs(prev => prev.map(n => ({ ...n, read:true })));
     } catch(e) {}
   }
 
   async function markRead(id) {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-      setUnread(prev => Math.max(0, prev - 1));
-      prevUnread.current = Math.max(0, prevUnread.current - 1);
+      await fetch('/api/notifications', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }) });
+      setNotifs(prev => prev.map(n => n.id===id ? {...n,read:true} : n));
+      setUnread(prev => { const v=Math.max(0,prev-1); prevUnread.current=v; return v; });
     } catch(e) {}
   }
 
   async function dismiss(id, e) {
     e.stopPropagation();
     try {
-      const wasUnread = notifs.find(n => n.id === id)?.read === false;
-      await fetch('/api/notifications?id=' + id, { method: 'DELETE' });
-      setNotifs(prev => prev.filter(n => n.id !== id));
-      if (wasUnread) {
-        setUnread(prev => Math.max(0, prev - 1));
-        prevUnread.current = Math.max(0, prevUnread.current - 1);
-      }
+      const wasUnread = notifs.find(n=>n.id===id)?.read===false;
+      await fetch('/api/notifications?id='+id, { method:'DELETE' });
+      setNotifs(prev => prev.filter(n=>n.id!==id));
+      if (wasUnread) setUnread(prev => { const v=Math.max(0,prev-1); prevUnread.current=v; return v; });
     } catch(e) {}
   }
 
@@ -207,30 +256,27 @@ export default function NotificationBell() {
     e.stopPropagation();
     try {
       await markAllRead();
-      // Delete all one by one
-      for (const n of notifs) {
-        await fetch('/api/notifications?id=' + n.id, { method: 'DELETE' });
-      }
-      setNotifs([]);
-      setUnread(0);
-      prevUnread.current = 0;
+      await Promise.all(notifs.map(n => fetch('/api/notifications?id='+n.id,{method:'DELETE'})));
+      setNotifs([]); setUnread(0); prevUnread.current=0;
     } catch(e) {}
   }
+
+  const isRinging = unread > 0;
 
   return (
     <div ref={panelRef} style={{ position:'relative', display:'flex', alignItems:'center' }}>
 
-      {/* 🔔 Bell button */}
+      {/* Bell button */}
       <button
-        onClick={() => { setOpen(o => !o); if (!open) fetchAll(); }}
-        title="Notifications"
-        style={{ position:'relative', background:'none', border:'none', cursor:'pointer', padding:'6px 8px', borderRadius:10, color: unread > 0 ? 'var(--yellow)' : 'var(--muted2)', transition:'color .15s', display:'flex', alignItems:'center' }}
+        onClick={() => { setOpen(o => { if (!o) fetchAll(); return !o; }); }}
+        title={`Notifications${unread>0?' ('+unread+' unread)':''}`}
+        style={{ position:'relative', background:'none', border:'none', cursor:'pointer', padding:'6px 8px', borderRadius:10, color: isRinging ? 'var(--yellow)' : 'var(--muted2)', transition:'all .2s', display:'flex', alignItems:'center' }}
         onMouseEnter={e => e.currentTarget.style.background='var(--surface3)'}
         onMouseLeave={e => e.currentTarget.style.background='none'}
       >
-        <span style={{ fontSize:'1.3rem', lineHeight:1 }}>🔔</span>
-        {unread > 0 && (
-          <span style={{ position:'absolute', top:0, right:0, background:'var(--red)', color:'#fff', fontSize:'.58rem', fontWeight:900, minWidth:17, height:17, borderRadius:20, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px', lineHeight:1, boxShadow:'0 0 0 2px var(--surface)', animation:'pulse 2s infinite' }}>
+        <span style={{ fontSize:'1.3rem', lineHeight:1, display:'inline-block', animation: isRinging ? 'bell-ring 1.5s ease infinite' : 'none' }}>🔔</span>
+        {isRinging && (
+          <span style={{ position:'absolute', top:0, right:0, background:'var(--red)', color:'#fff', fontSize:'.58rem', fontWeight:900, minWidth:17, height:17, borderRadius:20, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px', lineHeight:1, boxShadow:'0 0 0 2px var(--surface)', animation:'pulse 1.5s infinite' }}>
             {unread > 99 ? '99+' : unread}
           </span>
         )}
@@ -238,18 +284,25 @@ export default function NotificationBell() {
 
       {/* Dropdown panel */}
       {open && (
-        <div className="scale-in" style={{ position:'absolute', top:'calc(100% + 10px)', right:0, width:340, maxHeight:'min(480px, 80dvh)', background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:16, boxShadow:'0 16px 60px rgba(0,0,0,.5)', zIndex:999, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div className="scale-in" style={{ position:'absolute', top:'calc(100% + 10px)', right:0, width:340, maxHeight:'min(520px,80dvh)', background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:16, boxShadow:'0 20px 60px rgba(0,0,0,.6)', zIndex:999, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
           {/* Header */}
           <div style={{ padding:'13px 16px 11px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
             <div style={{ fontWeight:800, fontSize:'.9rem', display:'flex', alignItems:'center', gap:8 }}>
               🔔 Notifications
-              {unread > 0 && (
-                <span style={{ background:'var(--red)', color:'#fff', fontSize:'.6rem', fontWeight:700, padding:'2px 7px', borderRadius:20 }}>{unread} new</span>
-              )}
+              {isRinging && <span style={{ background:'var(--red)', color:'#fff', fontSize:'.6rem', fontWeight:700, padding:'2px 7px', borderRadius:20 }}>{unread} new</span>}
             </div>
-            <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-              {unread > 0 && (
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              {/* Push permission indicator */}
+              {permState === 'denied' && (
+                <span title="Browser notifications blocked — enable in browser settings" style={{ fontSize:'.65rem', color:'var(--orange)', cursor:'help' }}>🔕 Blocked</span>
+              )}
+              {permState === 'default' && (
+                <button onClick={() => Notification.requestPermission().then(p=>setPermState(p))} style={{ fontSize:'.65rem', color:'var(--cyan)', background:'rgba(0,212,255,.1)', border:'1px solid rgba(0,212,255,.2)', borderRadius:6, padding:'2px 8px', cursor:'pointer', fontFamily:'Inter,sans-serif' }}>
+                  Enable push
+                </button>
+              )}
+              {isRinging && (
                 <button onClick={markAllRead} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'.72rem', color:'var(--purple2)', fontWeight:600, fontFamily:'Inter,sans-serif', padding:0 }}>
                   Mark all read
                 </button>
@@ -258,46 +311,32 @@ export default function NotificationBell() {
             </div>
           </div>
 
-          {/* Notification list */}
+          {/* List */}
           <div style={{ overflowY:'auto', flex:1 }}>
-            {loading && (
-              <div style={{ padding:'24px', textAlign:'center', color:'var(--muted)', fontSize:'.82rem' }}>
-                <div style={{ marginBottom:8 }}>⏳</div>Loading…
-              </div>
-            )}
+            {loading && <div style={{ padding:'24px', textAlign:'center', color:'var(--muted)', fontSize:'.82rem' }}>⏳ Loading…</div>}
             {!loading && notifs.length === 0 && (
               <div style={{ padding:'36px 20px', textAlign:'center', color:'var(--muted)' }}>
-                <div style={{ fontSize:'2.5rem', marginBottom:10, opacity:.6 }}>🔕</div>
-                <div style={{ fontSize:'.85rem', fontWeight:600, marginBottom:5 }}>No notifications yet</div>
-                <div style={{ fontSize:'.75rem', lineHeight:1.5 }}>You'll hear a sound and see a badge when tasks are assigned or moved to the next stage</div>
+                <div style={{ fontSize:'2.5rem', marginBottom:10, opacity:.5 }}>🔕</div>
+                <div style={{ fontSize:'.85rem', fontWeight:600, marginBottom:6 }}>No notifications yet</div>
+                <div style={{ fontSize:'.75rem', lineHeight:1.6 }}>You'll hear a sound when tasks are assigned, moved, or anything changes in the app</div>
               </div>
             )}
             {notifs.map(n => (
-              <div key={n.id}
-                onClick={() => { markRead(n.id); }}
-                style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer', background: n.read ? 'transparent' : 'rgba(124,92,252,.07)', transition:'background .15s', display:'flex', gap:11, alignItems:'flex-start' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface3)'}
-                onMouseLeave={e => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(124,92,252,.07)'}
-              >
-                {/* Type icon */}
-                <div style={{ width:36, height:36, borderRadius:10, background: n.read ? 'rgba(255,255,255,.05)' : 'rgba(124,92,252,.18)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.1rem', flexShrink:0 }}>
+              <div key={n.id} onClick={() => markRead(n.id)}
+                style={{ padding:'11px 15px', borderBottom:'1px solid var(--border)', cursor:'pointer', background: n.read ? 'transparent' : 'rgba(124,92,252,.07)', transition:'background .15s', display:'flex', gap:11, alignItems:'flex-start' }}
+                onMouseEnter={e => e.currentTarget.style.background='var(--surface3)'}
+                onMouseLeave={e => e.currentTarget.style.background=n.read?'transparent':'rgba(124,92,252,.07)'}>
+                <div style={{ width:34, height:34, borderRadius:10, background: n.read ? 'rgba(255,255,255,.05)' : 'rgba(124,92,252,.18)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1rem', flexShrink:0 }}>
                   {TYPE_EMOJI[n.type] || TYPE_EMOJI.default}
                 </div>
-
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:'.8rem', fontWeight: n.read ? 500 : 700, color:'var(--text)', marginBottom:3, lineHeight:1.35 }}>{n.title}</div>
-                  <div style={{ fontSize:'.73rem', color:'var(--muted2)', lineHeight:1.45, marginBottom:4 }}>{n.body}</div>
-                  <div style={{ fontSize:'.66rem', color:'var(--muted)' }}>{timeAgo(n.created_at)}</div>
+                  <div style={{ fontSize:'.73rem', color:'var(--muted2)', lineHeight:1.4, marginBottom:4 }}>{n.body}</div>
+                  <div style={{ fontSize:'.64rem', color:'var(--muted)' }}>{timeAgo(n.created_at)}</div>
                 </div>
-
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, flexShrink:0 }}>
-                  {!n.read && <div style={{ width:8, height:8, borderRadius:'50%', background:'var(--purple)', marginTop:2 }}/>}
-                  <button
-                    onClick={e => dismiss(n.id, e)}
-                    title="Dismiss"
-                    style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:'.78rem', padding:2, lineHeight:1, opacity:.55 }}>
-                    ✕
-                  </button>
+                  {!n.read && <div style={{ width:7, height:7, borderRadius:'50%', background:'var(--purple)', marginTop:3 }}/>}
+                  <button onClick={e=>dismiss(n.id,e)} title="Dismiss" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:'.75rem', padding:2, lineHeight:1, opacity:.5 }}>✕</button>
                 </div>
               </div>
             ))}
@@ -306,13 +345,23 @@ export default function NotificationBell() {
           {/* Footer */}
           {notifs.length > 0 && (
             <div style={{ padding:'9px 16px', borderTop:'1px solid var(--border)', flexShrink:0, display:'flex', justifyContent:'center' }}>
-              <button onClick={clearAll} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'.72rem', color:'var(--muted)', fontFamily:'Inter,sans-serif' }}>
-                Clear all
-              </button>
+              <button onClick={clearAll} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'.72rem', color:'var(--muted)', fontFamily:'Inter,sans-serif' }}>Clear all</button>
             </div>
           )}
         </div>
       )}
+
+      {/* Bell ring animation */}
+      <style>{`
+        @keyframes bell-ring {
+          0%,100% { transform: rotate(0deg); }
+          10%      { transform: rotate(-15deg); }
+          20%      { transform: rotate(15deg); }
+          30%      { transform: rotate(-10deg); }
+          40%      { transform: rotate(10deg); }
+          50%      { transform: rotate(0deg); }
+        }
+      `}</style>
     </div>
   );
 }

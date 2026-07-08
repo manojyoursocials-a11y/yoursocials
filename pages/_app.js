@@ -1,7 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { SessionProvider } from 'next-auth/react';
 import Head from 'next/head';
 import '../styles/globals.css';
+
+// Global live refresh — refreshes the current page's data every 10s
+// This triggers Next.js router to re-fetch page props without a full reload
+function LiveRefresher() {
+  const router = useRouter();
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    function startTimer() {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        // Silently refresh current page data (re-runs getServerSideProps/getStaticProps)
+        router.replace(router.asPath, undefined, { scroll: false });
+      }, 10000);
+    }
+
+    // Start on focus, stop on blur (don't refresh hidden tabs unnecessarily)
+    window.addEventListener('focus', startTimer);
+    window.addEventListener('blur', () => { if (timerRef.current) clearInterval(timerRef.current); });
+
+    // Also start immediately
+    startTimer();
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      window.removeEventListener('focus', startTimer);
+    };
+  }, [router.asPath]);
+
+  return null;
+}
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
   // Auto-run setup on first load (idempotent — safe to run every time)
@@ -27,6 +59,7 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
 
         <title>Your Socials OS</title>
       </Head>
+      <LiveRefresher/>
       <Component {...pageProps}/>
     </SessionProvider>
   );
