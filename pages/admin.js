@@ -446,7 +446,7 @@ export default function Admin() {
                   </div>
                   <div style={{fontSize:'.78rem',color:'var(--muted2)',lineHeight:1.5}}>
                     {permState==='granted'
-                      ? 'Notifications will appear even when you're on a different tab or browser window'
+                      ? 'Notifications will appear even when you are on a different tab or browser window'
                       : permState==='denied'
                         ? 'Notifications are blocked. Go to browser Settings → Site Settings → Notifications to allow.'
                         : 'Enable to receive desktop notifications even when the app is in the background'}
