@@ -431,114 +431,140 @@ export default function Admin() {
         )}
 
         {tab==='Notifications'&&(
-          <div style={{maxWidth:600}}>
-            <div style={{marginBottom:20}}>
-              <h3 style={{fontWeight:900,fontSize:'1.1rem',marginBottom:4}}>🔔 Notification Settings</h3>
-              <p style={{fontSize:'.82rem',color:'var(--muted2)'}}>Control when and how Your Socials notifies your team</p>
+          <div style={{maxWidth:560}}>
+
+            {/* ── Header ── */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:24}}>
+              <div style={{width:40,height:40,borderRadius:12,background:'rgba(124,92,252,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',flexShrink:0}}>🔔</div>
+              <div>
+                <h3 style={{fontWeight:900,fontSize:'1.1rem',margin:0}}>Notification Settings</h3>
+                <p style={{fontSize:'.78rem',color:'var(--muted2)',margin:0,marginTop:2}}>Control sounds, push alerts and what triggers a notification</p>
+              </div>
             </div>
 
-            {/* Push permission status */}
-            <Card style={{marginBottom:16,background:permState==='granted'?'rgba(0,229,160,.06)':permState==='denied'?'rgba(255,77,109,.06)':'rgba(255,214,10,.06)',borderColor:permState==='granted'?'rgba(0,229,160,.25)':permState==='denied'?'rgba(255,77,109,.25)':'rgba(255,214,10,.25)'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:'.88rem',marginBottom:4}}>
-                    {permState==='granted'?'✅ Browser push notifications enabled':'⚠️ Browser push notifications'}
-                  </div>
-                  <div style={{fontSize:'.78rem',color:'var(--muted2)',lineHeight:1.5}}>
-                    {permState==='granted'
-                      ? 'Notifications will appear even when you are on a different tab or browser window'
-                      : permState==='denied'
-                        ? 'Notifications are blocked. Go to browser Settings → Site Settings → Notifications to allow.'
-                        : 'Enable to receive desktop notifications even when the app is in the background'}
-                  </div>
-                </div>
-                {permState!=='granted'&&permState!=='denied'&&(
-                  <Btn onClick={requestPushPermission}>Enable Push 🔔</Btn>
-                )}
-                {permState==='denied'&&(
-                  <span style={{fontSize:'.75rem',color:'var(--red)',background:'rgba(255,77,109,.1)',padding:'5px 12px',borderRadius:8}}>Blocked in browser</span>
-                )}
+            {/* ── Desktop Notifications section ── */}
+            <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,marginBottom:16,overflow:'hidden'}}>
+              <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontWeight:700,fontSize:'.95rem'}}>Desktop notifications</span>
+                <span title="Shows pop-up alerts even when app is in background" style={{width:18,height:18,borderRadius:'50%',border:'1.5px solid var(--muted)',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'.65rem',color:'var(--muted)',cursor:'help',flexShrink:0}}>i</span>
               </div>
-            </Card>
 
-            {/* Sound settings */}
-            <Card style={{marginBottom:16}}>
-              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>🔊 Sound Settings</div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-                <div>
-                  <div style={{fontWeight:600,fontSize:'.88rem',marginBottom:3}}>Notification Sound</div>
-                  <div style={{fontSize:'.75rem',color:'var(--muted2)'}}>Play a sound when new notifications arrive</div>
+              {/* Allow notifications toggle */}
+              <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <span style={{fontSize:'.88rem'}}>Allow desktop notifications</span>
+                  <button onClick={()=>saveNotifSettings({pushEnabled:!notifSettings.pushEnabled})}
+                    style={{width:48,height:28,borderRadius:14,background:notifSettings.pushEnabled?'#1a73e8':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:3,left:notifSettings.pushEnabled?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
+                  </button>
                 </div>
-                <button onClick={()=>saveNotifSettings({soundEnabled:!notifSettings.soundEnabled})}
-                  style={{width:46,height:26,borderRadius:13,background:notifSettings.soundEnabled?'var(--green)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
-                  <div style={{position:'absolute',top:3,left:notifSettings.soundEnabled?22:3,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
-                </button>
-              </div>
-              <div style={{marginBottom:14}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontSize:'.82rem',fontWeight:600}}>Volume</span>
-                  <span style={{fontSize:'.78rem',color:'var(--purple2)',fontWeight:700}}>{notifSettings.volume}%</span>
-                </div>
-                <input type="range" min="10" max="100" step="5" value={notifSettings.volume}
-                  onChange={e=>setNotifSettings(s=>({...s,volume:parseInt(e.target.value)}))}
-                  onMouseUp={()=>saveNotifSettings({volume:notifSettings.volume})}
-                  onTouchEnd={()=>saveNotifSettings({volume:notifSettings.volume})}
-                  style={{width:'100%',accentColor:'var(--purple)',cursor:'pointer'}}/>
-              </div>
-              <div style={{display:'flex',gap:10}}>
-                <Btn variant="ghost" onClick={testSound} disabled={testPlaying} style={{flex:1}}>
-                  {testPlaying?'🔊 Playing…':'▶ Test Sound'}
-                </Btn>
-              </div>
-            </Card>
 
-            {/* What triggers notifications */}
-            <Card style={{marginBottom:16}}>
-              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>📋 Task Notifications</div>
-              {[
-                ['taskCreated',   '📋 Task created',           'When any team member creates a task'],
-                ['taskAssigned',  '👤 Task assigned to me',    'When a task is assigned to you'],
-                ['taskMoved',     '⚡ Task status changed',    'When a task moves to a new column'],
-                ['taskEdited',    '✏️ Task edited',            'When task details are updated'],
-                ['taskDeleted',   '🗑 Task deleted',           'When a task is removed'],
-              ].map(([key,label,desc])=>(
-                <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                {/* Browser permission warning box — like Google Chat */}
+                {notifSettings.pushEnabled && permState !== 'granted' && (
+                  <div style={{marginTop:12,padding:'12px 14px',background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:10,display:'flex',alignItems:'flex-start',gap:12}}>
+                    <span style={{fontSize:'1rem',flexShrink:0,marginTop:2}}>⚠️</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:'.8rem',lineHeight:1.6,color:'var(--muted2)'}}>
+                        {permState==='denied'
+                          ? 'Notifications are blocked by your browser. Go to browser Settings → Site Settings → Notifications and allow yoursocials.vercel.app'
+                          : 'Notifications are turned on, but this browser is preventing them. Your Socials requires browser permission to show notifications on this device.'}
+                      </div>
+                    </div>
+                    {permState!=='denied'&&(
+                      <button onClick={requestPushPermission}
+                        style={{background:'none',border:'none',color:'#1a73e8',fontSize:'.82rem',fontWeight:700,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap',padding:'2px 0',flexShrink:0}}>
+                        Turn on
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {permState==='granted'&&notifSettings.pushEnabled&&(
+                  <div style={{marginTop:10,display:'flex',alignItems:'center',gap:6,fontSize:'.78rem',color:'var(--green)'}}>
+                    ✅ Desktop notifications are active
+                  </div>
+                )}
+              </div>
+
+              {/* Notification sounds */}
+              <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom: notifSettings.soundEnabled ? 14 : 0}}>
                   <div>
-                    <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>{label}</div>
-                    <div style={{fontSize:'.72rem',color:'var(--muted2)'}}>{desc}</div>
+                    <div style={{fontSize:'.88rem',marginBottom:2}}>Notification sounds</div>
+                    <div style={{fontSize:'.75rem',color:'var(--muted2)'}}>Play a sound when notifications arrive</div>
+                  </div>
+                  <button onClick={()=>saveNotifSettings({soundEnabled:!notifSettings.soundEnabled})}
+                    style={{width:48,height:28,borderRadius:14,background:notifSettings.soundEnabled?'#1a73e8':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:3,left:notifSettings.soundEnabled?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
+                  </button>
+                </div>
+                {notifSettings.soundEnabled&&(
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                      <span style={{fontSize:'.8rem',color:'var(--muted2)'}}>Volume</span>
+                      <span style={{fontSize:'.8rem',color:'var(--text)',fontWeight:700}}>{notifSettings.volume}%</span>
+                    </div>
+                    <input type="range" min="10" max="100" step="5" value={notifSettings.volume}
+                      onChange={e=>setNotifSettings(s=>({...s,volume:parseInt(e.target.value)}))}
+                      onMouseUp={()=>saveNotifSettings({volume:notifSettings.volume})}
+                      onTouchEnd={()=>saveNotifSettings({volume:notifSettings.volume})}
+                      style={{width:'100%',accentColor:'#1a73e8',cursor:'pointer',marginBottom:10}}/>
+                    <button onClick={testSound} disabled={testPlaying}
+                      style={{display:'flex',alignItems:'center',gap:7,padding:'7px 16px',background:testPlaying?'rgba(255,255,255,.06)':'var(--surface3)',border:'1px solid var(--border2)',borderRadius:8,color:testPlaying?'var(--muted)':'var(--text)',fontSize:'.82rem',fontWeight:600,cursor:testPlaying?'default':'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
+                      {testPlaying?<>🔊 Playing…</>:<>▶ Test sound</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Reaction / task notifications */}
+              {[
+                ['taskAssigned',  'Task assigned to me',   'Get notified when a task is assigned to you'],
+                ['taskMoved',     'Task status changed',   'When a task moves to In Progress, Review, or Done'],
+                ['taskCreated',   'Task created',          'When any team member creates a new task'],
+                ['taskEdited',    'Task edited',           'When task details are updated by someone'],
+                ['taskDeleted',   'Task deleted',          'When a task is permanently removed'],
+              ].map(([key,label,desc],i,arr)=>(
+                <div key={key} style={{padding:'13px 20px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:'.88rem',marginBottom:2}}>{label}</div>
+                    <div style={{fontSize:'.74rem',color:'var(--muted2)'}}>{desc}</div>
                   </div>
                   <button onClick={()=>saveNotifSettings({[key]:!notifSettings[key]})}
-                    style={{width:42,height:24,borderRadius:12,background:notifSettings[key]?'var(--purple)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
-                    <div style={{position:'absolute',top:2,left:notifSettings[key]?20:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
+                    style={{width:48,height:28,borderRadius:14,background:notifSettings[key]?'#1a73e8':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:3,left:notifSettings[key]?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
                   </button>
                 </div>
               ))}
-            </Card>
+            </div>
 
-            <Card style={{marginBottom:16}}>
-              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>📩 Other Notifications</div>
+            {/* ── Follow-ups & Clients section ── */}
+            <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,marginBottom:20,overflow:'hidden'}}>
+              <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)'}}>
+                <span style={{fontWeight:700,fontSize:'.95rem'}}>Follow-ups & Clients</span>
+              </div>
               {[
-                ['followupCreated','📩 Follow-up added',        'When a new follow-up is created'],
-                ['followupDone',   '✅ Follow-up completed',    'When a follow-up is marked as sent'],
-                ['clientCreated',  '🏢 Client added',           'When a new client is created'],
-                ['clientUpdated',  '🏢 Client updated',         'When client details change'],
-                ['clientDeleted',  '🏢 Client removed',         'When a client is deleted'],
-              ].map(([key,label,desc])=>(
-                <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>{label}</div>
-                    <div style={{fontSize:'.72rem',color:'var(--muted2)'}}>{desc}</div>
+                ['followupCreated','Follow-up added',    'When a new client follow-up is created'],
+                ['followupDone',   'Follow-up sent',     'When a follow-up is marked as sent (+30 coins)'],
+                ['clientCreated',  'Client added',       'When a new client is created'],
+                ['clientUpdated',  'Client updated',     'When client details are edited'],
+                ['clientDeleted',  'Client removed',     'When a client is deleted'],
+              ].map(([key,label,desc],i,arr)=>(
+                <div key={key} style={{padding:'13px 20px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:'.88rem',marginBottom:2}}>{label}</div>
+                    <div style={{fontSize:'.74rem',color:'var(--muted2)'}}>{desc}</div>
                   </div>
                   <button onClick={()=>saveNotifSettings({[key]:!notifSettings[key]})}
-                    style={{width:42,height:24,borderRadius:12,background:notifSettings[key]?'var(--purple)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
-                    <div style={{position:'absolute',top:2,left:notifSettings[key]?20:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
+                    style={{width:48,height:28,borderRadius:14,background:notifSettings[key]?'#1a73e8':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:3,left:notifSettings[key]?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
                   </button>
                 </div>
               ))}
-            </Card>
+            </div>
 
-            <div style={{fontSize:'.75rem',color:'var(--muted2)',background:'rgba(124,92,252,.06)',border:'1px solid rgba(124,92,252,.15)',borderRadius:10,padding:'10px 14px',lineHeight:1.6}}>
-              💡 Settings are saved per browser. Each team member can configure their own preferences by visiting this page.
+            <div style={{fontSize:'.74rem',color:'var(--muted2)',lineHeight:1.7,padding:'0 4px'}}>
+              💡 Settings are saved in this browser. Each team member can set their own preferences here.
             </div>
           </div>
         )}
