@@ -19,6 +19,26 @@ const NAV = [
 
 ];
 
+// Live coins — polls /api/me every 8s so coins update without re-login
+function useLiveCoins(sessionCoins) {
+  const [coins, setCoins] = useState(sessionCoins || 0);
+  useEffect(() => {
+    let mounted = true;
+    async function fetchCoins() {
+      try {
+        const r = await fetch('/api/me');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (mounted && d.coins !== undefined) setCoins(d.coins);
+      } catch(e) {}
+    }
+    fetchCoins();
+    const t = setInterval(fetchCoins, 8000);
+    return () => { mounted = false; clearInterval(t); };
+  }, []);
+  return coins;
+}
+
 function LiveClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -110,6 +130,8 @@ export default function Layout({ children, badges = {} }) {
     </div>
   );
 
+  const liveCoins = useLiveCoins(session?.user?.coins || 0);
+
   return (
     <div style={{ display:'flex', height:'100dvh', overflow:'hidden', position:'relative' }}>
 
@@ -147,9 +169,7 @@ export default function Layout({ children, badges = {} }) {
             <span style={{ fontSize:'.75rem', color:'var(--muted)', fontWeight:500 }}>Live</span>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-            {session?.user?.coins !== undefined && (
-              <span style={{ color:'var(--yellow)', fontWeight:700, fontSize:'.82rem' }}>🪙 {(session.user.coins||0).toLocaleString()}</span>
-            )}
+            <span style={{ color:'var(--yellow)', fontWeight:700, fontSize:'.82rem' }}>🪙 {liveCoins.toLocaleString()}</span>
             <span style={{ fontSize:'.75rem', color:'var(--muted2)' }}>
   <LiveClock />
             </span>

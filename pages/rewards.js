@@ -23,7 +23,24 @@ export default function Rewards() {
   const [confirm,  setConfirm]  = useState(null);
 
   const isAdmin    = session?.user?.role === 'admin';
-  const myCoins    = session?.user?.coins || 0;
+  const [myCoins, setMyCoins] = useState(session?.user?.coins || 0);
+
+  // Fetch live coins so they update without re-login
+  useEffect(() => {
+    async function fetchMe() {
+      try {
+        const r = await fetch('/api/me');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.coins !== undefined) setMyCoins(d.coins);
+      } catch(e) {}
+    }
+    if (status === 'authenticated') {
+      fetchMe();
+      const t = setInterval(fetchMe, 8000);
+      return () => clearInterval(t);
+    }
+  }, [status]);
 
   useEffect(()=>{if(status==='authenticated')loadAll();},[status]);
 
