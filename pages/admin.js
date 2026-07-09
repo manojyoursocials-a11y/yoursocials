@@ -31,6 +31,13 @@ export default function Admin() {
   const [coinResetUser, setCoinResetUser] = useState(null);
 
   // Notification settings (stored in localStorage for admin)
+  // Global notification settings (server-side, affects ALL team members)
+  const [globalNotif, setGlobalNotif] = useState({
+    task_created:true,task_assigned:true,task_moved:true,task_edited:true,task_deleted:true,
+    followup_created:true,followup_done:true,client_created:true,client_updated:true,client_deleted:true,
+  });
+  const [globalNotifLoaded, setGlobalNotifLoaded] = useState(false);
+
   const [notifSettings, setNotifSettings] = useState({
     soundEnabled:    true,
     pushEnabled:     true,
@@ -49,7 +56,7 @@ export default function Admin() {
   const [permState, setPermState] = useState('default');
   const [testPlaying, setTestPlaying] = useState(false);
 
-  // Load saved notification settings from localStorage
+  // Load saved notification settings from localStorage + global settings from DB
   useEffect(() => {
     try {
       const saved = localStorage.getItem('ys_notif_settings');
@@ -58,7 +65,21 @@ export default function Admin() {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermState(Notification.permission);
     }
+    // Load global team notification settings from server
+    fetch('/api/settings').then(r=>r.json()).then(d=>{
+      setGlobalNotif(d);
+      setGlobalNotifLoaded(true);
+    }).catch(()=>setGlobalNotifLoaded(true));
   }, []);
+
+  async function toggleGlobalNotif(key, value) {
+    const updated = { ...globalNotif, [key]: value };
+    setGlobalNotif(updated);
+    try {
+      await fetch('/api/settings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ [key]: value }) });
+      toast.success(value ? 'Notification enabled for all members' : 'Notification disabled for all members');
+    } catch(e) { toast.error('Failed to save'); }
+  }
 
   function saveNotifSettings(updates) {
     const next = { ...notifSettings, ...updates };
@@ -563,9 +584,100 @@ export default function Admin() {
               ))}
             </div>
 
-            <div style={{fontSize:'.74rem',color:'var(--muted2)',lineHeight:1.7,padding:'0 4px'}}>
-              💡 Settings are saved in this browser. Each team member can set their own preferences here.
+            <div style={{fontSize:'.74rem',color:'var(--muted2)',lineHeight:1.7,padding:'0 4px',marginBottom:28}}>
+              💡 Personal settings above are saved in this browser only. Global settings below apply to all team members.
             </div>
+
+            {/* ── GLOBAL TEAM NOTIFICATIONS (admin only, server-side) ── */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+              <div style={{width:40,height:40,borderRadius:12,background:'rgba(255,77,109,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>👥</div>
+              <div>
+                <h3 style={{fontWeight:900,fontSize:'1rem',margin:0}}>Team Notification Controls</h3>
+                <p style={{fontSize:'.76rem',color:'var(--muted2)',margin:0,marginTop:2}}>Turn on or off each notification type for ALL team members</p>
+              </div>
+            </div>
+
+            {!globalNotifLoaded && <div style={{padding:'20px',textAlign:'center',color:'var(--muted)',fontSize:'.82rem'}}>Loading…</div>}
+
+            {globalNotifLoaded && (
+              <div>
+                {/* Task notifications */}
+                <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,marginBottom:14,overflow:'hidden'}}>
+                  <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface3)',display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:'1rem'}}>📋</span>
+                    <span style={{fontWeight:700,fontSize:'.9rem'}}>Task Notifications</span>
+                    <span style={{fontSize:'.72rem',color:'var(--muted)',background:'rgba(255,255,255,.06)',padding:'2px 8px',borderRadius:20,marginLeft:'auto'}}>affects all {members.length} members</span>
+                  </div>
+                  {[
+                    ['task_created',  '📋 Task Created',       'Notify everyone when a new task is created'],
+                    ['task_assigned', '👤 Task Assigned',      'Notify when a task is assigned to someone'],
+                    ['task_moved',    '⚡ Task Status Changed', 'Notify when a task moves between columns'],
+                    ['task_edited',   '✏️ Task Edited',        'Notify when task details are updated'],
+                    ['task_deleted',  '🗑 Task Deleted',       'Notify when a task is permanently deleted'],
+                  ].map(([key,label,desc],i,arr)=>(
+                    <div key={key} style={{padding:'13px 20px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'.87rem',fontWeight:600,marginBottom:2}}>{label}</div>
+                        <div style={{fontSize:'.73rem',color:'var(--muted2)'}}>{desc}</div>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <span style={{fontSize:'.72rem',color:globalNotif[key]?'var(--green)':'var(--red)',fontWeight:700}}>{globalNotif[key]?'ON':'OFF'}</span>
+                        <button onClick={()=>toggleGlobalNotif(key,!globalNotif[key])}
+                          style={{width:48,height:28,borderRadius:14,background:globalNotif[key]?'var(--green)':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                          <div style={{position:'absolute',top:3,left:globalNotif[key]?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Follow-up & Client notifications */}
+                <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,marginBottom:20,overflow:'hidden'}}>
+                  <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface3)',display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:'1rem'}}>📩</span>
+                    <span style={{fontWeight:700,fontSize:'.9rem'}}>Follow-ups & Clients</span>
+                    <span style={{fontSize:'.72rem',color:'var(--muted)',background:'rgba(255,255,255,.06)',padding:'2px 8px',borderRadius:20,marginLeft:'auto'}}>affects all {members.length} members</span>
+                  </div>
+                  {[
+                    ['followup_created','📩 Follow-up Added',    'Notify when a new follow-up is created'],
+                    ['followup_done',   '✅ Follow-up Sent',     'Notify when follow-up is marked complete'],
+                    ['client_created',  '🏢 Client Added',       'Notify when a new client is created'],
+                    ['client_updated',  '🏢 Client Updated',     'Notify when client details change'],
+                    ['client_deleted',  '🏢 Client Removed',     'Notify when a client is deleted'],
+                  ].map(([key,label,desc],i,arr)=>(
+                    <div key={key} style={{padding:'13px 20px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:'.87rem',fontWeight:600,marginBottom:2}}>{label}</div>
+                        <div style={{fontSize:'.73rem',color:'var(--muted2)'}}>{desc}</div>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <span style={{fontSize:'.72rem',color:globalNotif[key]?'var(--green)':'var(--red)',fontWeight:700}}>{globalNotif[key]?'ON':'OFF'}</span>
+                        <button onClick={()=>toggleGlobalNotif(key,!globalNotif[key])}
+                          style={{width:48,height:28,borderRadius:14,background:globalNotif[key]?'var(--green)':'rgba(255,255,255,.15)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                          <div style={{position:'absolute',top:3,left:globalNotif[key]?23:3,width:22,height:22,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 5px rgba(0,0,0,.4)'}}/>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick actions */}
+                <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                  <Btn variant="ghost" size="sm" onClick={async()=>{
+                    const all = {task_created:true,task_assigned:true,task_moved:true,task_edited:true,task_deleted:true,followup_created:true,followup_done:true,client_created:true,client_updated:true,client_deleted:true};
+                    setGlobalNotif(all);
+                    await fetch('/api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(all)});
+                    toast.success('All notifications enabled for the team ✅');
+                  }}>✅ Enable All</Btn>
+                  <Btn variant="ghost" size="sm" onClick={async()=>{
+                    const none = {task_created:false,task_assigned:false,task_moved:false,task_edited:false,task_deleted:false,followup_created:false,followup_done:false,client_created:false,client_updated:false,client_deleted:false};
+                    setGlobalNotif(none);
+                    await fetch('/api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(none)});
+                    toast.info('All notifications disabled for the team 🔕');
+                  }}>🔕 Disable All</Btn>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

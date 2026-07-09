@@ -19,6 +19,9 @@ async function notifyUsers(db, userIds, payload, actorId) {
 // Notify ALL members in the system (for global events like create/delete)
 async function notifyAll(db, payload, actorId) {
   try {
+    // Check global admin setting for this notification type
+    const settings = await db.getSetting('notif_settings');
+    if (settings && settings[payload.type] === false) return; // disabled globally
     const users = await db.getUsers();
     await notifyUsers(db, users.map(u => u.id), payload, actorId);
   } catch(e) { console.error('notifyAll error:', e.message); }

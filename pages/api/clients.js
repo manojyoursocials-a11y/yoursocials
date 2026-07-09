@@ -5,6 +5,8 @@ import { v4 as uuid } from 'uuid';
 
 async function notifyAll(db, payload, actorId) {
   try {
+    const settings = await db.getSetting('notif_settings');
+    if (settings && settings[payload.type] === false) return;
     const users = await db.getUsers();
     for (const u of users) {
       if (u.id === actorId) continue;
