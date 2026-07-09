@@ -5,10 +5,8 @@ import Layout from '../components/Layout';
 import { Card, Btn, Modal, Input, Avatar, Spinner, Tag, toast, api, MEMBER_COLORS } from '../components/UI';
 
 const STATUS_COLS = [
-  { id:'todo',       label:'To Do',        color:'#9090AA' },
-  { id:'inprogress', label:'In Progress',   color:'#00D4FF' },
-  { id:'review',     label:'Under Review',  color:'#FFD60A' },
-  { id:'done',       label:'Done',          color:'#00E5A0' },
+  { id:'todo',       label:'To Do',       color:'#9090AA' },
+  { id:'inprogress', label:'In Progress', color:'#00D4FF' },
 ];
 
 async function fetchJ(url) {
@@ -129,15 +127,15 @@ export default function Team() {
             {displayMembers.map((m, mi) => {
               const color  = MEMBER_COLORS[members.indexOf(m) % MEMBER_COLORS.length];
               const stats  = memberStats(m.id);
-              const todoTasks   = memberTasks(m.id, 'todo');
-              const reviewTasks = memberTasks(m.id, 'review');
+              const todoTasks       = memberTasks(m.id, 'todo');
+              const inProgressTasks = memberTasks(m.id, 'inprogress');
               const allMTasks   = memberTasks(m.id);
               const hasActive   = allMTasks.filter(t=>t.status!=='done').length > 0;
 
               return (
                 <div key={m.id} style={{ marginBottom:28 }}>
                   {/* Member header row */}
-                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10, padding:'10px 14px', background:'var(--surface2)', borderRadius:12, border:'1px solid var(--border)', borderLeft:`4px solid ${color}` }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8, padding:'8px 12px', background:'var(--surface2)', borderRadius:10, border:'1px solid var(--border)', borderLeft:`4px solid ${color}` }}>
                     <Avatar name={m.name||m.email} image={m.image} size={38} color={color}/>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:800, fontSize:'.92rem' }}>{m.name||m.email?.split('@')[0]}</div>
@@ -162,13 +160,11 @@ export default function Team() {
                     </div>
                   </div>
 
-                  {/* Two columns: To Do + Under Review */}
+                  {/* Two columns: To Do + In Progress */}
                   {hasActive ? (
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                      {/* To Do */}
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                       <TaskCol label="📋 To Do" color="#9090AA" tasks={todoTasks} allTasks={allTasks} today={today}/>
-                      {/* Under Review */}
-                      <TaskCol label="👁️ Under Review" color="#FFD60A" tasks={reviewTasks} allTasks={allTasks} today={today}/>
+                      <TaskCol label="⚡ In Progress" color="#00D4FF" tasks={inProgressTasks} allTasks={allTasks} today={today}/>
                     </div>
                   ) : (
                     <div style={{ padding:'14px 18px', background:'rgba(0,229,160,.04)', border:'1px solid rgba(0,229,160,.15)', borderRadius:10, fontSize:'.82rem', color:'var(--green)' }}>
@@ -222,17 +218,17 @@ export default function Team() {
         {view === 'cards' && selectedMem && (function() {
           const m     = members.find(m=>m.id===selectedMem);
           const color = MEMBER_COLORS[members.indexOf(m) % MEMBER_COLORS.length];
-          const todo   = memberTasks(selectedMem, 'todo');
-          const review = memberTasks(selectedMem, 'review');
+          const todo       = memberTasks(selectedMem, 'todo');
+          const inProgress = memberTasks(selectedMem, 'inprogress');
           return (
             <div style={{ marginTop:20 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                 <div style={{ fontWeight:800, fontSize:'1rem' }}>Tasks for {m?.name?.split(' ')[0]}</div>
                 <Btn variant="ghost" size="sm" onClick={() => setSelectedMem(null)}>✕ Close</Btn>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <TaskCol label="📋 To Do" color="#9090AA" tasks={todo} allTasks={allTasks} today={today}/>
-                <TaskCol label="👁️ Under Review" color="#FFD60A" tasks={review} allTasks={allTasks} today={today}/>
+                <TaskCol label="⚡ In Progress" color="#00D4FF" tasks={inProgress} allTasks={allTasks} today={today}/>
               </div>
             </div>
           );
@@ -298,9 +294,9 @@ function TaskCol({ label, color, tasks, today }) {
           const overdue = t.deadline && t.status!=='done' && String(t.deadline).slice(0,10) < today;
           const postToday = t.post_date && String(t.post_date).slice(0,10) === today;
           return (
-            <div key={t.id} style={{ padding:'9px 11px', background:'var(--surface3)', borderRadius:9, marginBottom:6, border:`1px solid ${overdue?'rgba(255,77,109,.35)':'var(--border)'}`, borderLeft:`3px solid ${color}` }}>
-              <div style={{ fontWeight:600, fontSize:'.82rem', marginBottom:5, lineHeight:1.3 }}>{t.title}</div>
-              <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+            <div key={t.id} style={{ padding:'7px 10px', background:'var(--surface3)', borderRadius:8, marginBottom:5, border:`1px solid ${overdue?'rgba(255,77,109,.35)':'var(--border)'}`, borderLeft:`3px solid ${color}` }}>
+              <div style={{ fontWeight:600, fontSize:'.78rem', marginBottom:4, lineHeight:1.3 }}>{t.title}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
                 <Tag text={t.priority}/>
                 {t.client_name && <span style={{ fontSize:'.67rem', color:'var(--muted)' }}>🏢 {t.client_name}</span>}
                 {postToday && <span style={{ fontSize:'.63rem', background:'rgba(124,92,252,.15)', color:'var(--purple2)', padding:'1px 6px', borderRadius:4, fontWeight:600 }}>📤 Post today</span>}

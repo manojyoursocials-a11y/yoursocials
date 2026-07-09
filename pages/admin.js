@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Card, Btn, Modal, Input, Select, Textarea, Avatar, Spinner, EmptyState, toast, sounds, api, MEMBER_COLORS } from '../components/UI';
 
-const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups','Finance'];
+const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups','Finance','Notifications'];
 
 export default function Admin() {
   const { data: session, status } = useSession();
@@ -28,7 +28,62 @@ export default function Admin() {
   const [editing,    setEditing]    = useState(null);
   const [delConfirm, setDelConfirm] = useState(null);
   const [form,       setForm]       = useState({});
-  const [coinResetUser, setCoinResetUser] = useState(null); // user to reset, or 'all'
+  const [coinResetUser, setCoinResetUser] = useState(null);
+
+  // Notification settings (stored in localStorage for admin)
+  const [notifSettings, setNotifSettings] = useState({
+    soundEnabled:    true,
+    pushEnabled:     true,
+    taskCreated:     true,
+    taskMoved:       true,
+    taskAssigned:    true,
+    taskEdited:      false,
+    taskDeleted:     true,
+    followupCreated: true,
+    followupDone:    true,
+    clientCreated:   false,
+    clientUpdated:   false,
+    clientDeleted:   false,
+    volume:          90,
+  });
+  const [permState, setPermState] = useState('default');
+  const [testPlaying, setTestPlaying] = useState(false);
+
+  // Load saved notification settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ys_notif_settings');
+      if (saved) setNotifSettings(JSON.parse(saved));
+    } catch(e) {}
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermState(Notification.permission);
+    }
+  }, []);
+
+  function saveNotifSettings(updates) {
+    const next = { ...notifSettings, ...updates };
+    setNotifSettings(next);
+    try { localStorage.setItem('ys_notif_settings', JSON.stringify(next)); } catch(e) {}
+    toast.success('Settings saved');
+  }
+
+  async function requestPushPermission() {
+    if (!('Notification' in window)) { toast.error('Browser does not support notifications'); return; }
+    const perm = await Notification.requestPermission();
+    setPermState(perm);
+    if (perm === 'granted') toast.success('Push notifications enabled! 🔔');
+    else toast.error('Permission denied — enable in browser settings');
+  }
+
+  function testSound() {
+    setTestPlaying(true);
+    try {
+      const a = new Audio('/notification.mp3');
+      a.volume = (notifSettings.volume || 90) / 100;
+      a.play();
+      setTimeout(() => setTestPlaying(false), 2000);
+    } catch(e) { setTestPlaying(false); }
+  } // user to reset, or 'all'
 
   useEffect(() => {
     if (status==='authenticated' && session?.user?.role==='admin') fetchAll();
@@ -372,6 +427,119 @@ export default function Admin() {
               <div style={{fontSize:'.82rem',color:'var(--muted2)',marginBottom:20,lineHeight:1.6}}>Track income, expenses, daily cashflow, monthly reports,<br/>payment modes and export CSV reports</div>
               <Btn onClick={()=>router.push('/finance')}>Go to Finance →</Btn>
             </Card>
+          </div>
+        )}
+
+        {tab==='Notifications'&&(
+          <div style={{maxWidth:600}}>
+            <div style={{marginBottom:20}}>
+              <h3 style={{fontWeight:900,fontSize:'1.1rem',marginBottom:4}}>🔔 Notification Settings</h3>
+              <p style={{fontSize:'.82rem',color:'var(--muted2)'}}>Control when and how Your Socials notifies your team</p>
+            </div>
+
+            {/* Push permission status */}
+            <Card style={{marginBottom:16,background:permState==='granted'?'rgba(0,229,160,.06)':permState==='denied'?'rgba(255,77,109,.06)':'rgba(255,214,10,.06)',borderColor:permState==='granted'?'rgba(0,229,160,.25)':permState==='denied'?'rgba(255,77,109,.25)':'rgba(255,214,10,.25)'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:'.88rem',marginBottom:4}}>
+                    {permState==='granted'?'✅ Browser push notifications enabled':'⚠️ Browser push notifications'}
+                  </div>
+                  <div style={{fontSize:'.78rem',color:'var(--muted2)',lineHeight:1.5}}>
+                    {permState==='granted'
+                      ? 'Notifications will appear even when you're on a different tab or browser window'
+                      : permState==='denied'
+                        ? 'Notifications are blocked. Go to browser Settings → Site Settings → Notifications to allow.'
+                        : 'Enable to receive desktop notifications even when the app is in the background'}
+                  </div>
+                </div>
+                {permState!=='granted'&&permState!=='denied'&&(
+                  <Btn onClick={requestPushPermission}>Enable Push 🔔</Btn>
+                )}
+                {permState==='denied'&&(
+                  <span style={{fontSize:'.75rem',color:'var(--red)',background:'rgba(255,77,109,.1)',padding:'5px 12px',borderRadius:8}}>Blocked in browser</span>
+                )}
+              </div>
+            </Card>
+
+            {/* Sound settings */}
+            <Card style={{marginBottom:16}}>
+              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>🔊 Sound Settings</div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:'.88rem',marginBottom:3}}>Notification Sound</div>
+                  <div style={{fontSize:'.75rem',color:'var(--muted2)'}}>Play a sound when new notifications arrive</div>
+                </div>
+                <button onClick={()=>saveNotifSettings({soundEnabled:!notifSettings.soundEnabled})}
+                  style={{width:46,height:26,borderRadius:13,background:notifSettings.soundEnabled?'var(--green)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                  <div style={{position:'absolute',top:3,left:notifSettings.soundEnabled?22:3,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
+                </button>
+              </div>
+              <div style={{marginBottom:14}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                  <span style={{fontSize:'.82rem',fontWeight:600}}>Volume</span>
+                  <span style={{fontSize:'.78rem',color:'var(--purple2)',fontWeight:700}}>{notifSettings.volume}%</span>
+                </div>
+                <input type="range" min="10" max="100" step="5" value={notifSettings.volume}
+                  onChange={e=>setNotifSettings(s=>({...s,volume:parseInt(e.target.value)}))}
+                  onMouseUp={()=>saveNotifSettings({volume:notifSettings.volume})}
+                  onTouchEnd={()=>saveNotifSettings({volume:notifSettings.volume})}
+                  style={{width:'100%',accentColor:'var(--purple)',cursor:'pointer'}}/>
+              </div>
+              <div style={{display:'flex',gap:10}}>
+                <Btn variant="ghost" onClick={testSound} disabled={testPlaying} style={{flex:1}}>
+                  {testPlaying?'🔊 Playing…':'▶ Test Sound'}
+                </Btn>
+              </div>
+            </Card>
+
+            {/* What triggers notifications */}
+            <Card style={{marginBottom:16}}>
+              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>📋 Task Notifications</div>
+              {[
+                ['taskCreated',   '📋 Task created',           'When any team member creates a task'],
+                ['taskAssigned',  '👤 Task assigned to me',    'When a task is assigned to you'],
+                ['taskMoved',     '⚡ Task status changed',    'When a task moves to a new column'],
+                ['taskEdited',    '✏️ Task edited',            'When task details are updated'],
+                ['taskDeleted',   '🗑 Task deleted',           'When a task is removed'],
+              ].map(([key,label,desc])=>(
+                <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>{label}</div>
+                    <div style={{fontSize:'.72rem',color:'var(--muted2)'}}>{desc}</div>
+                  </div>
+                  <button onClick={()=>saveNotifSettings({[key]:!notifSettings[key]})}
+                    style={{width:42,height:24,borderRadius:12,background:notifSettings[key]?'var(--purple)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:2,left:notifSettings[key]?20:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
+                  </button>
+                </div>
+              ))}
+            </Card>
+
+            <Card style={{marginBottom:16}}>
+              <div style={{fontSize:'.7rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--muted)',marginBottom:14}}>📩 Other Notifications</div>
+              {[
+                ['followupCreated','📩 Follow-up added',        'When a new follow-up is created'],
+                ['followupDone',   '✅ Follow-up completed',    'When a follow-up is marked as sent'],
+                ['clientCreated',  '🏢 Client added',           'When a new client is created'],
+                ['clientUpdated',  '🏢 Client updated',         'When client details change'],
+                ['clientDeleted',  '🏢 Client removed',         'When a client is deleted'],
+              ].map(([key,label,desc])=>(
+                <div key={key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:'.85rem',marginBottom:2}}>{label}</div>
+                    <div style={{fontSize:'.72rem',color:'var(--muted2)'}}>{desc}</div>
+                  </div>
+                  <button onClick={()=>saveNotifSettings({[key]:!notifSettings[key]})}
+                    style={{width:42,height:24,borderRadius:12,background:notifSettings[key]?'var(--purple)':'rgba(255,255,255,.12)',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+                    <div style={{position:'absolute',top:2,left:notifSettings[key]?20:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.3)'}}/>
+                  </button>
+                </div>
+              ))}
+            </Card>
+
+            <div style={{fontSize:'.75rem',color:'var(--muted2)',background:'rgba(124,92,252,.06)',border:'1px solid rgba(124,92,252,.15)',borderRadius:10,padding:'10px 14px',lineHeight:1.6}}>
+              💡 Settings are saved per browser. Each team member can configure their own preferences by visiting this page.
+            </div>
           </div>
         )}
 

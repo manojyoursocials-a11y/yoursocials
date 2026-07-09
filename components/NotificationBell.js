@@ -15,6 +15,14 @@ const TYPE_EMOJI = {
   default:         '🔔',
 };
 
+// ── Read notification settings from localStorage ───────────────
+function getSettings() {
+  try {
+    const s = localStorage.getItem('ys_notif_settings');
+    return s ? JSON.parse(s) : {};
+  } catch(e) { return {}; }
+}
+
 // ── Audio singleton ─────────────────────────────────────────────
 let _audio = null;
 let _unlocked = false;
@@ -24,9 +32,12 @@ if (typeof window !== 'undefined') {
   );
 }
 function playSound() {
+  const settings = getSettings();
+  if (settings.soundEnabled === false) return; // respect sound toggle
   if (!_unlocked) return;
   try {
-    if (!_audio) { _audio = new Audio('/notification.mp3'); _audio.volume = 0.9; _audio.preload = 'auto'; }
+    if (!_audio) { _audio = new Audio('/notification.mp3'); _audio.preload = 'auto'; }
+    _audio.volume = Math.min(1, (settings.volume || 90) / 100);
     _audio.currentTime = 0;
     _audio.play().catch(() => { _audio = null; });
   } catch(e) { _audio = null; }
@@ -99,6 +110,8 @@ function updateTitle(count) {
 
 // ── Browser push notification ───────────────────────────────────
 function sendPush(title, body, tag) {
+  const settings = getSettings();
+  if (settings.pushEnabled === false) return;
   if (typeof window === 'undefined') return;
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;

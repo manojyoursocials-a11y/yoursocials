@@ -46,7 +46,7 @@ export default function Leaderboard() {
             </Card>}
             <Card>
               <div style={{fontSize:'.68rem',fontWeight:700,textTransform:'uppercase',color:'var(--muted)',marginBottom:10}}>How to earn coins</div>
-              {[['✅ Task created','+10 🪙'],['🏁 Task done','+50 🪙'],['📩 Follow-up sent','+30 🪙']].map(([a,v])=>(
+              {[['✅ Task created','+10 🪙'],['🏁 Task done','+30 🪙'],['👁️ Under Review (Designer)','+30 🪙'],['📩 Follow-up sent','+30 🪙']].map(([a,v])=>(
                 <div key={a} style={{display:'flex',justifyContent:'space-between',fontSize:'.78rem',color:'var(--muted2)',padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
                   <span>{a}</span><span style={{fontWeight:700,color:'var(--yellow)'}}>{v}</span>
                 </div>
