@@ -5,14 +5,20 @@ import { v4 as uuid } from 'uuid';
 
 async function notifyAll(db, payload, actorId) {
   try {
-    const settings = await db.getSetting('notif_settings');
-    if (settings && settings[payload.type] === false) return;
+    let enabled = true;
+    try {
+      const settings = await db.getSetting('notif_settings');
+      if (settings && settings[payload.type] === false) enabled = false;
+    } catch(e) {}
+    if (!enabled) return;
     const users = await db.getUsers();
     for (const u of users) {
       if (u.id === actorId) continue;
-      await db.createNotification({ id: uuid(), user_id: u.id, ...payload, task_id: null });
+      try {
+        await db.createNotification({ id: uuid(), user_id: u.id, ...payload, task_id: null });
+      } catch(e) { console.error('notify err:', e.message); }
     }
-  } catch(e) {}
+  } catch(e) { console.error('notifyAll err:', e.message); }
 }
 
 export default async function handler(req, res) {

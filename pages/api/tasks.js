@@ -3,28 +3,30 @@ import { authOptions } from '../../lib/auth';
 import { getDb } from '../../lib/db';
 import { v4 as uuid } from 'uuid';
 
-// Send one notification to one user (silently ignore errors)
+// Notify one user — never throws
 async function notify(db, { userId, type, title, body, taskId }) {
   try {
     await db.createNotification({ id: uuid(), user_id: userId, type, title, body, task_id: taskId || null });
-  } catch(e) { console.error('notify error:', e.message); }
+  } catch(e) { console.error('notify err:', e.message); }
 }
 
-// Notify a set of user IDs (skip the actor)
-async function notifyUsers(db, userIds, payload, actorId) {
-  const unique = [...new Set(userIds)].filter(id => id && id !== actorId);
-  for (const uid of unique) await notify(db, { ...payload, userId: uid });
-}
-
-// Notify ALL members in the system (for global events like create/delete)
+// Notify all users except the actor
 async function notifyAll(db, payload, actorId) {
   try {
-    // Check global admin setting for this notification type
-    const settings = await db.getSetting('notif_settings');
-    if (settings && settings[payload.type] === false) return; // disabled globally
+    // Check global admin settings — default ALL ON if table missing
+    let enabled = true;
+    try {
+      const settings = await db.getSetting('notif_settings');
+      if (settings && settings[payload.type] === false) enabled = false;
+    } catch(e) { /* table may not exist yet — default to enabled */ }
+
+    if (!enabled) return;
+
     const users = await db.getUsers();
-    await notifyUsers(db, users.map(u => u.id), payload, actorId);
-  } catch(e) { console.error('notifyAll error:', e.message); }
+    for (const u of users) {
+      if (u.id !== actorId) await notify(db, { ...payload, userId: u.id });
+    }
+  } catch(e) { console.error('notifyAll err:', e.message); }
 }
 
 export default async function handler(req, res) {
@@ -33,7 +35,6 @@ export default async function handler(req, res) {
 
   const userId   = session.user.id;
   const userName = session.user.name || session.user.email || 'Someone';
-  const jobTitle = (session.user.job_title || '').toLowerCase();
   const isAdmin  = session.user.role === 'admin';
   const db = getDb();
 
@@ -68,7 +69,7 @@ export default async function handler(req, res) {
     });
     await db.addCoins(userId, 10);
 
-    // Notify EVERYONE: new task created
+    // Notify everyone: task created
     await notifyAll(db, {
       type:  'task_created',
       title: '📋 New task created',
@@ -76,7 +77,7 @@ export default async function handler(req, res) {
       taskId: task.id,
     }, userId);
 
-    // Extra: notify assignee specifically if not the creator
+    // Extra: notify assignee if different from creator
     if (assigneeId !== userId) {
       await notify(db, {
         userId: assigneeId,
@@ -90,7 +91,7 @@ export default async function handler(req, res) {
     return res.status(201).json(task);
   }
 
-  // ── PATCH — Move / Edit / Bulk Delete ─────────────────────
+  // ── PATCH — Move / Edit / Bulk delete ─────────────────────
   if (req.method === 'PATCH') {
     const body = req.body;
 
@@ -109,42 +110,39 @@ export default async function handler(req, res) {
     const id = body.id;
     if (!id) return res.status(400).json({ error: 'id required' });
 
-    // ── STATUS MOVE ──────────────────────────────────────────
+    // ── STATUS MOVE ─────────────────────────────────────────
     if (body.status !== undefined && body.title === undefined) {
       const task = await db.getTaskById(id);
       const { reviewAwarded, doneAwarded } = await db.moveTask(id, body.status);
 
-      // Coins
-      if (body.status === 'done' && doneAwarded) await db.addCoins(userId, 30);
+      // Award coins
+      if (body.status === 'done'   && doneAwarded)   await db.addCoins(userId, 30);
       if (body.status === 'review' && reviewAwarded) {
-        if (jobTitle.includes('graphic') || jobTitle.includes('designer')) await db.addCoins(userId, 30);
+        const jt = (session.user.job_title || '').toLowerCase();
+        if (jt.includes('graphic') || jt.includes('designer')) await db.addCoins(userId, 30);
       }
 
       const labels = { todo:'To Do', inprogress:'In Progress', review:'Under Review', done:'Done ✅' };
       const emojis = { todo:'📋', inprogress:'⚡', review:'👁️', done:'✅' };
-      const label  = labels[body.status] || body.status;
-      const emoji  = emojis[body.status] || '📋';
-      const tTitle = task?.title || 'A task';
 
-      // Notify EVERYONE about status change
+      // Notify everyone about status change
       await notifyAll(db, {
         type:  'task_moved',
-        title: `${emoji} Task moved to ${label}`,
-        body:  `${userName} moved "${tTitle}" → ${label}`,
+        title: `${emojis[body.status] || '📋'} Task moved to ${labels[body.status] || body.status}`,
+        body:  `${userName} moved "${task?.title || 'a task'}" → ${labels[body.status] || body.status}`,
         taskId: id,
       }, userId);
 
       return res.json({ ok: true });
     }
 
-    // ── EDIT ─────────────────────────────────────────────────
+    // ── EDIT ────────────────────────────────────────────────
     if (body.title !== undefined) {
-      // Permission check
       if (!isAdmin) {
         const task = await db.getTaskById(id);
-        if (!task) return res.status(404).json({ error: 'Task not found' });
+        if (!task) return res.status(404).json({ error: 'Not found' });
         if (task.created_by !== userId && task.owner_id !== userId) {
-          return res.status(403).json({ error: 'Only the assigner or assignee can edit this task' });
+          return res.status(403).json({ error: 'Only assigner or assignee can edit' });
         }
       }
 
@@ -153,7 +151,6 @@ export default async function handler(req, res) {
       if (typeof editData.links !== 'string') editData.links = JSON.stringify(editData.links || []);
       await db.editTask(id, editData);
 
-      // Notify EVERYONE: task edited
       await notifyAll(db, {
         type:  'task_edited',
         title: '✏️ Task updated',
@@ -161,7 +158,7 @@ export default async function handler(req, res) {
         taskId: id,
       }, userId);
 
-      // Extra: notify new assignee if changed
+      // Notify new assignee if changed
       if (body.owner_id && body.owner_id !== oldTask?.owner_id && body.owner_id !== userId) {
         await notify(db, {
           userId: body.owner_id,
@@ -178,19 +175,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Provide status or title' });
   }
 
-  // ── DELETE — Single task ───────────────────────────────────
+  // ── DELETE ─────────────────────────────────────────────────
   if (req.method === 'DELETE') {
     const task = await db.getTaskById(req.query.id);
     await db.deleteTask(req.query.id);
-
-    // Notify EVERYONE: task deleted
     await notifyAll(db, {
       type:  'task_deleted',
       title: '🗑 Task deleted',
       body:  `${userName} deleted "${task?.title || 'a task'}"`,
       taskId: null,
     }, userId);
-
     return res.json({ ok: true });
   }
 
