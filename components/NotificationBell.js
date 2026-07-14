@@ -3,96 +3,82 @@ import { useSession } from 'next-auth/react';
 
 const EMOJI = {
   task_created:'📋', task_assigned:'👤', task_moved:'⚡',
-  task_edited:'✏️', task_deleted:'🗑', followup_created:'📩',
+  task_edited:'✏️',  task_deleted:'🗑',  followup_created:'📩',
   followup_done:'✅', client_created:'🏢', client_updated:'🏢',
   client_deleted:'🏢',
 };
 
-// ── Sound ─────────────────────────────────────────────────────
-let audioCtx = null;
-let audioBuf = null;
-
+// ─── Sound via AudioContext ──────────────────────────────────
+let _ctx = null, _buf = null;
+async function loadSound() {
+  if (_buf) return;
+  try {
+    _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const r  = await fetch('/notification.mp3');
+    const ab = await r.arrayBuffer();
+    _buf     = await _ctx.decodeAudioData(ab);
+  } catch(e) {}
+}
 function playSound() {
   try {
-    const cfg = JSON.parse(localStorage.getItem('ys_notif_settings') || '{}');
-    if (cfg.soundEnabled === false) return;
-    const vol = (cfg.volume || 90) / 100;
-
-    if (audioBuf && audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const src  = audioCtx.createBufferSource();
-      const gain = audioCtx.createGain();
-      src.buffer      = audioBuf;
+    const s = JSON.parse(localStorage.getItem('ys_notif_settings') || '{}');
+    if (s.soundEnabled === false) return;
+    const vol = Math.min(1, (s.volume || 90) / 100);
+    if (_ctx && _buf) {
+      if (_ctx.state === 'suspended') _ctx.resume();
+      const src  = _ctx.createBufferSource();
+      const gain = _ctx.createGain();
+      src.buffer      = _buf;
       gain.gain.value = vol;
       src.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(_ctx.destination);
       src.start(0);
-      return;
+    } else {
+      const a = new Audio('/notification.mp3');
+      a.volume = vol;
+      a.play().catch(() => {});
     }
-    // Fallback: plain Audio element
-    const a = new Audio('/notification.mp3');
-    a.volume = vol;
-    a.play().catch(() => {});
   } catch(e) {}
 }
 
-async function loadAudio() {
-  if (audioBuf) return;
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const res = await fetch('/notification.mp3');
-    const buf = await res.arrayBuffer();
-    audioBuf  = await audioCtx.decodeAudioData(buf);
-  } catch(e) {}
-}
-
-// ── OS popup ──────────────────────────────────────────────────
-function showOSPopup(title, body, tag) {
+// ─── OS popup ────────────────────────────────────────────────
+function osPopup(title, body, tag) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
     const n = new Notification(title, {
-      body, icon: '/favicon-32.png', tag: tag || 'ys', silent: false,
+      body, icon: '/favicon-32.png', badge: '/favicon-32.png',
+      tag: tag || 'ys', silent: false, requireInteraction: false,
     });
     n.onclick = () => { window.focus(); n.close(); };
-    setTimeout(() => n.close(), 6000);
+    setTimeout(() => { try { n.close(); } catch(e) {} }, 6000);
   } catch(e) {}
 }
 
-// ── Favicon badge ─────────────────────────────────────────────
-function setFaviconBadge(count) {
+// ─── Favicon badge ───────────────────────────────────────────
+let _favLink = null;
+function setFavicon(count) {
   if (typeof document === 'undefined') return;
-  let link = document.querySelector("link[rel~='icon']");
-  if (!link) {
-    link = document.createElement('link');
-    link.rel = 'icon';
-    document.head.appendChild(link);
+  if (!_favLink) {
+    _favLink = document.querySelector("link[rel~='icon']");
+    if (!_favLink) { _favLink = document.createElement('link'); _favLink.rel = 'icon'; document.head.appendChild(_favLink); }
   }
-  if (count === 0) {
-    link.href = '/favicon.ico';
-    document.title = document.title.replace(/^\(\d+\)\s*/, '');
-    return;
-  }
-  // Badge on favicon
+  const base = document.title.replace(/^\(\d+\)\s*/, '');
+  if (count === 0) { _favLink.href = '/favicon.ico'; document.title = base; return; }
+  document.title = `(${count}) ${base}`;
   const canvas = document.createElement('canvas');
   canvas.width = 32; canvas.height = 32;
   const ctx = canvas.getContext('2d');
   const img = new Image();
   img.onload = () => {
     ctx.drawImage(img, 0, 0, 32, 32);
-    // Red circle
     ctx.fillStyle = '#FF4D6D';
     ctx.beginPath(); ctx.arc(24, 8, 9, 0, 2 * Math.PI); ctx.fill();
-    // Count text
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 10px Arial';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(count > 9 ? '9+' : String(count), 24, 8);
-    link.href = canvas.toDataURL('image/png');
+    _favLink.href = canvas.toDataURL('image/png');
   };
   img.src = '/favicon-32.png';
-  // Tab title
-  const base = document.title.replace(/^\(\d+\)\s*/, '');
-  document.title = `(${count}) ${base}`;
 }
 
 function ago(iso) {
@@ -112,47 +98,75 @@ export default function NotificationBell() {
   const [perm,    setPerm]    = useState('default');
   const [toasts,  setToasts]  = useState([]);
 
-  // Use a ref for since so poll always reads the latest value
   const since     = useRef(null);
   const prevCount = useRef(0);
   const panelRef  = useRef(null);
 
-  // ── Init on mount ─────────────────────────────────────────
+  // ── Handle messages from Service Worker ─────────────────
+  function handleSWMessage(event) {
+    if (event.data?.type !== 'NEW_NOTIF') return;
+    const n     = event.data.notification;
+    const count = event.data.unread || 0;
+
+    // Add to list
+    setNotifs(prev => {
+      const ids = new Set(prev.map(x => x.id));
+      return ids.has(n.id) ? prev : [n, ...prev].slice(0, 60);
+    });
+
+    // Show in-app toast
+    const key = n.id + Date.now();
+    setToasts(prev => [...prev.slice(-2), { ...n, _key: key }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t._key !== key)), 5500);
+
+    // Sound + OS popup (if tab is visible)
+    if (count > prevCount.current) {
+      playSound();
+      if (document.visibilityState === 'visible') osPopup(n.title, n.body, n.id);
+    }
+    setUnread(count);
+    prevCount.current = count;
+  }
+
+  // ── Init ────────────────────────────────────────────────
   useEffect(() => {
-    // Push permission
+    // Push permission — request immediately
     if ('Notification' in window) {
       setPerm(Notification.permission);
       if (Notification.permission === 'default') {
         Notification.requestPermission().then(p => setPerm(p));
       }
     }
-    // Load audio buffer on first gesture
-    const loadOnGesture = () => loadAudio();
-    ['click','keydown','touchstart'].forEach(e =>
-      window.addEventListener(e, loadOnGesture, { once: true, passive: true })
-    );
-    // Try loading immediately
-    loadAudio();
 
-    // Close on outside click
-    const handleOutside = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+    // Load audio on first gesture
+    const unlock = () => loadSound();
+    window.addEventListener('click',      unlock, { once: true, passive: true });
+    window.addEventListener('keydown',    unlock, { once: true, passive: true });
+    window.addEventListener('touchstart', unlock, { once: true, passive: true });
+    loadSound(); // try immediately
+
+    // Close panel on outside click
+    const outside = e => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', outside);
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(e => console.log('SW error', e));
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
     };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // ── Favicon updates ───────────────────────────────────────
-  useEffect(() => { setFaviconBadge(unread); }, [unread]);
+  // ── Favicon ──────────────────────────────────────────────
+  useEffect(() => { setFavicon(unread); }, [unread]);
 
-  // ── Add a toast ───────────────────────────────────────────
-  function addToast(n) {
-    const key = n.id + Date.now();
-    setToasts(prev => [...prev.slice(-2), { ...n, _key: key }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t._key !== key)), 5000);
-  }
-
-  // ── Fetch ALL notifications (on open or first load) ───────
+  // ── Fetch all ────────────────────────────────────────────
   async function fetchAll() {
     setLoading(true);
     try {
@@ -161,119 +175,110 @@ export default function NotificationBell() {
       const d = await r.json();
       setNotifs(Array.isArray(d.notifications) ? d.notifications : []);
       const cnt = d.unread || 0;
-      setUnread(cnt);
-      prevCount.current = cnt;
+      setUnread(cnt); prevCount.current = cnt;
     } catch(e) {}
     setLoading(false);
   }
 
-  // ── Poll for new notifications ────────────────────────────
-  async function checkNew() {
+  // ── In-page poll every 4s (while tab is active) ──────────
+  async function poll() {
     if (!since.current) return;
     try {
-      const url = '/api/notifications?since=' + encodeURIComponent(since.current);
-      const r   = await fetch(url);
+      const r = await fetch('/api/notifications?since=' + encodeURIComponent(since.current));
       if (!r.ok) return;
       const d = await r.json();
+      since.current = new Date().toISOString(); // advance pointer
 
-      // Advance the since pointer BEFORE processing
-      since.current = new Date().toISOString();
-
-      const fresh    = Array.isArray(d.notifications) ? d.notifications : [];
-      const newCount = typeof d.unread === 'number' ? d.unread : 0;
+      const fresh = Array.isArray(d.notifications) ? d.notifications : [];
+      const count = d.unread || 0;
 
       if (fresh.length > 0) {
-        // Merge new notifications at top of list
         setNotifs(prev => {
-          const existing = new Set(prev.map(n => n.id));
-          const toAdd    = fresh.filter(n => !existing.has(n.id));
-          return toAdd.length > 0 ? [...toAdd, ...prev].slice(0, 60) : prev;
+          const ids = new Set(prev.map(n => n.id));
+          const add = fresh.filter(n => !ids.has(n.id));
+          return add.length ? [...add, ...prev].slice(0, 60) : prev;
         });
 
-        // Alert user only if count genuinely increased
-        if (newCount > prevCount.current) {
+        if (count > prevCount.current) {
           playSound();
+
+          // In-app toast for each new notification
           fresh.forEach(n => {
-            addToast(n);
-            showOSPopup(n.title, n.body, n.id);
+            const key = n.id + Date.now();
+            setToasts(prev => [...prev.slice(-2), { ...n, _key: key }]);
+            setTimeout(() => setToasts(prev => prev.filter(t => t._key !== key)), 5500);
+            // OS popup
+            osPopup(n.title, n.body, n.id);
           });
         }
-        setUnread(newCount);
-        prevCount.current = newCount;
-      } else {
-        // Even if no new notifs, update unread count if it changed
-        if (newCount !== prevCount.current) {
-          setUnread(newCount);
-          prevCount.current = newCount;
+        setUnread(count); prevCount.current = count;
+
+        // Tell SW to advance its pointer too
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_SINCE', since: since.current });
         }
+      } else if (count !== prevCount.current) {
+        setUnread(count); prevCount.current = count;
       }
     } catch(e) {}
   }
 
-  // ── Start polling when authenticated ──────────────────────
+  // ── Start everything when authenticated ──────────────────
   useEffect(() => {
     if (status !== 'authenticated') return;
 
-    // Set since to 2 minutes ago on first start to catch anything recent
+    // Set since 2 minutes back to catch anything recent
     since.current = new Date(Date.now() - 120000).toISOString();
 
-    // Load all existing notifs
     fetchAll();
 
-    // Poll every 4 seconds
-    const timer = setInterval(checkNew, 4000);
+    // Start in-page polling
+    const timer = setInterval(poll, 4000);
+
+    // Tell Service Worker to start polling too
+    const startSW = () => {
+      const sw = navigator.serviceWorker?.controller;
+      if (sw) {
+        sw.postMessage({ type: 'START', since: since.current });
+      }
+    };
+    navigator.serviceWorker?.ready.then(reg => {
+      reg.active?.postMessage({ type: 'START', since: since.current });
+    });
+    startSW();
+
     return () => clearInterval(timer);
   }, [status]); // eslint-disable-line
 
-  // ── Mark all read ─────────────────────────────────────────
+  // ── Actions ──────────────────────────────────────────────
   async function markAllRead() {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true }),
-      });
+      await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) });
       setUnread(0); prevCount.current = 0;
       setNotifs(p => p.map(n => ({ ...n, read: true })));
     } catch(e) {}
   }
-
-  // ── Mark one read ─────────────────────────────────────────
   async function markOne(id) {
     try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
+      await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
       setNotifs(p => p.map(n => n.id === id ? { ...n, read: true } : n));
-      setUnread(p => Math.max(0, p - 1));
-      prevCount.current = Math.max(0, prevCount.current - 1);
+      setUnread(p => { const v = Math.max(0, p-1); prevCount.current = v; return v; });
     } catch(e) {}
   }
-
-  // ── Dismiss one ───────────────────────────────────────────
   async function dismiss(id, e) {
     e.stopPropagation();
     try {
       const wasUnread = notifs.find(n => n.id === id)?.read === false;
       await fetch('/api/notifications?id=' + id, { method: 'DELETE' });
       setNotifs(p => p.filter(n => n.id !== id));
-      if (wasUnread) {
-        setUnread(p => Math.max(0, p - 1));
-        prevCount.current = Math.max(0, prevCount.current - 1);
-      }
+      if (wasUnread) setUnread(p => { const v = Math.max(0, p-1); prevCount.current = v; return v; });
     } catch(e) {}
   }
-
-  // ── Clear all ─────────────────────────────────────────────
   async function clearAll(e) {
     e.stopPropagation();
     try {
       await markAllRead();
-      await Promise.all(notifs.map(n =>
-        fetch('/api/notifications?id=' + n.id, { method: 'DELETE' })
-      ));
+      await Promise.all(notifs.map(n => fetch('/api/notifications?id=' + n.id, { method: 'DELETE' })));
       setNotifs([]); setUnread(0); prevCount.current = 0;
     } catch(e) {}
   }
@@ -282,48 +287,25 @@ export default function NotificationBell() {
 
   return (
     <>
-      {/* ── In-app toast popups (bottom-right, like Google Chat) ── */}
-      <div style={{
-        position: 'fixed', bottom: 20, right: 20, zIndex: 999999,
-        display: 'flex', flexDirection: 'column-reverse', gap: 10,
-        pointerEvents: 'none',
-      }}>
+      {/* ── In-app toast popups ─────────────────────────── */}
+      <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 99999, display: 'flex', flexDirection: 'column-reverse', gap: 10, pointerEvents: 'none', maxWidth: 380 }}>
         {toasts.map(t => (
-          <div key={t._key} style={{
-            background: '#fff', color: '#202124', borderRadius: 10,
-            boxShadow: '0 4px 28px rgba(0,0,0,.25)', padding: '14px 16px',
-            minWidth: 300, maxWidth: 380, display: 'flex', gap: 12,
-            alignItems: 'flex-start', animation: 'ys-slidein .3s ease',
-            pointerEvents: 'auto', cursor: 'default',
-          }}>
-            <div style={{
-              width: 38, height: 38, borderRadius: '50%',
-              background: 'linear-gradient(135deg,#7C5CFC,#FF5FA0)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.1rem', flexShrink: 0,
-            }}>
+          <div key={t._key} style={{ background: '#ffffff', color: '#202124', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,.22)', padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'flex-start', animation: 'ys-slidein .3s ease', pointerEvents: 'auto' }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,#7C5CFC,#FF5FA0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
               {EMOJI[t.type] || '🔔'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '.87rem', marginBottom: 4, fontFamily: 'Arial,sans-serif', color: '#202124' }}>
-                {t.title}
-              </div>
-              <div style={{ fontSize: '.8rem', color: '#5f6368', lineHeight: 1.45, fontFamily: 'Arial,sans-serif' }}>
-                {t.body}
-              </div>
-              <div style={{ fontSize: '.7rem', color: '#9aa0a6', marginTop: 6, fontFamily: 'Arial,sans-serif' }}>
-                yoursocials.vercel.app
-              </div>
+              <div style={{ fontWeight: 700, fontSize: '.87rem', color: '#202124', marginBottom: 3, fontFamily: 'Arial,sans-serif' }}>{t.title}</div>
+              <div style={{ fontSize: '.8rem', color: '#5f6368', lineHeight: 1.45, fontFamily: 'Arial,sans-serif' }}>{t.body}</div>
+              <div style={{ fontSize: '.7rem', color: '#9aa0a6', marginTop: 5, fontFamily: 'Arial,sans-serif' }}>yoursocials.vercel.app</div>
             </div>
-            <button
-              onClick={() => setToasts(p => p.filter(x => x._key !== t._key))}
-              style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer', fontSize: '1rem', padding: '0 2px', lineHeight: 1, flexShrink: 0 }}
-            >✕</button>
+            <button onClick={() => setToasts(p => p.filter(x => x._key !== t._key))}
+              style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer', fontSize: '1rem', padding: 2, lineHeight: 1, flexShrink: 0 }}>✕</button>
           </div>
         ))}
       </div>
 
-      {/* ── Bell + dropdown ── */}
+      {/* ── Bell ──────────────────────────────────────────── */}
       <div ref={panelRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button
           onClick={() => { setOpen(o => !o); if (!open) fetchAll(); }}
@@ -331,36 +313,18 @@ export default function NotificationBell() {
           onMouseEnter={e => e.currentTarget.style.background = 'var(--surface3)'}
           onMouseLeave={e => e.currentTarget.style.background = 'none'}
         >
-          <span style={{
-            fontSize: '1.3rem', lineHeight: 1, display: 'inline-block',
-            color: ringing ? 'var(--yellow)' : 'var(--muted2)',
-            animation: ringing ? 'ys-bell 2s ease infinite' : 'none',
-          }}>🔔</span>
-
+          <span style={{ fontSize: '1.3rem', lineHeight: 1, display: 'inline-block', color: ringing ? 'var(--yellow)' : 'var(--muted2)', animation: ringing ? 'ys-bell 2s ease infinite' : 'none' }}>🔔</span>
           {ringing && (
-            <span style={{
-              position: 'absolute', top: 0, right: 0,
-              background: '#FF4D6D', color: '#fff', fontSize: '.58rem',
-              fontWeight: 900, minWidth: 17, height: 17, borderRadius: 20,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '0 4px', lineHeight: 1,
-              boxShadow: '0 0 0 2px var(--surface)',
-              animation: 'ys-pulse 1.8s infinite',
-            }}>
+            <span style={{ position: 'absolute', top: 0, right: 0, background: '#FF4D6D', color: '#fff', fontSize: '.58rem', fontWeight: 900, minWidth: 17, height: 17, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', lineHeight: 1, boxShadow: '0 0 0 2px var(--surface)', animation: 'ys-pulse 1.8s infinite' }}>
               {unread > 99 ? '99+' : unread}
             </span>
           )}
         </button>
 
+        {/* Dropdown */}
         {open && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-            width: 360, maxHeight: 'min(540px,82dvh)',
-            background: 'var(--surface2)', border: '1px solid var(--border2)',
-            borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,.65)',
-            zIndex: 9999, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}>
-            {/* Header */}
+          <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: 360, maxHeight: 'min(540px,82dvh)', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,.65)', zIndex: 9999, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
             <div style={{ padding: '13px 16px 11px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div style={{ fontWeight: 800, fontSize: '.9rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                 🔔 Notifications
@@ -373,32 +337,24 @@ export default function NotificationBell() {
                     Enable popup
                   </button>
                 )}
-                {perm === 'denied'  && <span style={{ fontSize: '.65rem', color: 'var(--orange)' }}>🔕 Blocked</span>}
-                {perm === 'granted' && <span style={{ fontSize: '.65rem', color: 'var(--green)' }}>✅ Popups on</span>}
-                {ringing && (
-                  <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.72rem', color: 'var(--purple2)', fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: 0 }}>
-                    Mark all read
-                  </button>
-                )}
+                {perm === 'denied'  && <span style={{ fontSize: '.65rem', color: 'var(--orange)' }}>🔕 Blocked — allow in browser settings</span>}
+                {perm === 'granted' && <span style={{ fontSize: '.65rem', color: 'var(--green)' }}>✅ OS popups on</span>}
+                {ringing && <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.72rem', color: 'var(--purple2)', fontWeight: 600, fontFamily: 'Inter,sans-serif', padding: 0 }}>Mark all read</button>}
                 <button onClick={() => setOpen(false)} style={{ background: 'var(--surface3)', border: '1px solid var(--border)', borderRadius: 6, width: 26, height: 26, cursor: 'pointer', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.8rem' }}>✕</button>
               </div>
             </div>
 
-            {/* List */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {loading && <div style={{ padding: '28px', textAlign: 'center', color: 'var(--muted)', fontSize: '.82rem' }}>⏳ Loading…</div>}
               {!loading && notifs.length === 0 && (
                 <div style={{ padding: '40px 24px', textAlign: 'center' }}>
                   <div style={{ fontSize: '2.5rem', marginBottom: 10, opacity: .4 }}>🔕</div>
                   <div style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>All caught up!</div>
-                  <div style={{ fontSize: '.75rem', color: 'var(--muted2)', lineHeight: 1.7 }}>
-                    When tasks are created, moved or completed — everyone sees a popup here and in the bottom-right corner.
-                  </div>
+                  <div style={{ fontSize: '.75rem', color: 'var(--muted2)', lineHeight: 1.7 }}>When tasks are created, moved or completed, a popup appears here and bottom-right — even when you are in Adobe or another app.</div>
                 </div>
               )}
               {notifs.map(n => (
-                <div key={n.id}
-                  onClick={() => markOne(n.id)}
+                <div key={n.id} onClick={() => markOne(n.id)}
                   style={{ padding: '11px 15px', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: n.read ? 'transparent' : 'rgba(124,92,252,.08)', display: 'flex', gap: 11, alignItems: 'flex-start', transition: 'background .12s' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface3)'}
                   onMouseLeave={e => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(124,92,252,.08)'}
@@ -428,8 +384,8 @@ export default function NotificationBell() {
         )}
 
         <style>{`
-          @keyframes ys-bell  { 0%,100%{transform:rotate(0)} 8%{transform:rotate(-20deg)} 16%{transform:rotate(20deg)} 24%{transform:rotate(-13deg)} 32%{transform:rotate(13deg)} 40%{transform:rotate(0)} }
-          @keyframes ys-pulse { 0%,100%{box-shadow:0 0 0 2px var(--surface)} 50%{box-shadow:0 0 0 4px rgba(255,77,109,.4)} }
+          @keyframes ys-bell    { 0%,100%{transform:rotate(0)} 8%{transform:rotate(-20deg)} 16%{transform:rotate(20deg)} 24%{transform:rotate(-13deg)} 32%{transform:rotate(13deg)} 40%{transform:rotate(0)} }
+          @keyframes ys-pulse   { 0%,100%{box-shadow:0 0 0 2px var(--surface)} 50%{box-shadow:0 0 0 4px rgba(255,77,109,.4)} }
           @keyframes ys-slidein { from{transform:translateX(110%);opacity:0} to{transform:translateX(0);opacity:1} }
         `}</style>
       </div>
