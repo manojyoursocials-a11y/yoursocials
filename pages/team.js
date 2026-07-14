@@ -42,6 +42,182 @@ export default function Team() {
     setLoading(false);
   }
 
+  // Export one member's task board as a PNG image
+  async function exportMemberImage(member) {
+    const todo       = allTasks.filter(t => t.owner_id === member.id && t.status === 'todo');
+    const inprogress = allTasks.filter(t => t.owner_id === member.id && t.status === 'inprogress');
+    const color      = MEMBER_COLORS[members.indexOf(member) % MEMBER_COLORS.length] || '#7C5CFC';
+
+    const W = 900, PAD = 28, COL_GAP = 20, HEADER_H = 80;
+    const COL_W = (W - PAD * 2 - COL_GAP) / 2;
+    const TASK_H = 56, TASK_GAP = 8;
+
+    const maxTasks = Math.max(todo.length, inprogress.length, 1);
+    const colH = 48 + maxTasks * (TASK_H + TASK_GAP) + 20;
+    const H = HEADER_H + PAD + colH + PAD + 24;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = W * 2;  // 2x for retina
+    canvas.height = H * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+
+    // Background
+    ctx.fillStyle = '#09090F';
+    ctx.fillRect(0, 0, W, H);
+
+    // Brand header strip
+    ctx.fillStyle = color + '22';
+    ctx.fillRect(0, 0, W, HEADER_H);
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 5, HEADER_H);
+
+    // Avatar circle
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(44, HEADER_H/2, 26, 0, 2*Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText((member.name||'?').slice(0,2).toUpperCase(), 44, HEADER_H/2);
+
+    // Name + role
+    ctx.fillStyle = '#F0EFFF';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(member.name || member.email, 82, HEADER_H/2 - 10);
+    ctx.fillStyle = '#9090AA';
+    ctx.font = '13px Arial';
+    ctx.fillText(member.job_title || member.role || 'Team Member', 82, HEADER_H/2 + 12);
+
+    // Stats on right
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#FFD60A';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('🪙 ' + (member.coins || 0), W - PAD, HEADER_H/2 - 10);
+    ctx.fillStyle = '#00D4FF';
+    ctx.font = '13px Arial';
+    ctx.fillText(todo.length + inprogress.length + ' active tasks', W - PAD, HEADER_H/2 + 10);
+
+    // Date top right
+    ctx.fillStyle = '#6B6B8A';
+    ctx.font = '11px Arial';
+    const dateStr = new Date().toLocaleDateString('en-IN', {weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    ctx.fillText(dateStr, W - PAD, 14);
+
+    // Watermark
+    ctx.fillStyle = '#F0EFFF';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('YOUR SOCIALS OS', PAD, 14);
+
+    // Draw columns
+    function drawColumn(title, colColor, tasks, x) {
+      // Column header
+      ctx.fillStyle = '#16161F';
+      ctx.beginPath();
+      const rr = 10;
+      ctx.roundRect(x, HEADER_H + PAD, COL_W, colH, rr);
+      ctx.fill();
+
+      // Column header bar
+      ctx.fillStyle = colColor + '22';
+      ctx.beginPath(); ctx.roundRect(x, HEADER_H + PAD, COL_W, 44, [rr, rr, 0, 0]); ctx.fill();
+      ctx.fillStyle = colColor;
+      ctx.fillRect(x, HEADER_H + PAD, 4, 44);
+
+      ctx.fillStyle = colColor;
+      ctx.font = 'bold 13px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(title, x + 14, HEADER_H + PAD + 22);
+
+      // Count badge
+      ctx.fillStyle = colColor + '33';
+      const badgeX = x + COL_W - 38, badgeY = HEADER_H + PAD + 10, bW = 28, bH = 22;
+      ctx.beginPath(); ctx.roundRect(badgeX, badgeY, bW, bH, 11); ctx.fill();
+      ctx.fillStyle = colColor;
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(tasks.length, badgeX + bW / 2, badgeY + bH / 2 + 1);
+
+      // Tasks
+      tasks.forEach((t, i) => {
+        const ty = HEADER_H + PAD + 48 + i * (TASK_H + TASK_GAP);
+        const tx = x + 8, tW = COL_W - 16;
+
+        // Task card
+        const overdue = t.deadline && String(t.deadline).slice(0,10) < today;
+        ctx.fillStyle = overdue ? '#FF4D6D11' : '#1E1E2A';
+        ctx.beginPath(); ctx.roundRect(tx, ty, tW, TASK_H, 8); ctx.fill();
+        if (overdue) {
+          ctx.strokeStyle = '#FF4D6D44';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.roundRect(tx, ty, tW, TASK_H, 8); ctx.stroke();
+        }
+
+        // Priority badge
+        const priColor = { P1:'#FF4D6D', P2:'#FF9F43', P3:'#FFD60A', P4:'#00E5A0' }[t.priority] || '#9090AA';
+        ctx.fillStyle = priColor + '22';
+        ctx.beginPath(); ctx.roundRect(tx + 8, ty + 8, 26, 16, 8); ctx.fill();
+        ctx.fillStyle = priColor;
+        ctx.font = 'bold 9px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.priority || 'P3', tx + 21, ty + 16);
+
+        // Title
+        ctx.fillStyle = '#F0EFFF';
+        ctx.font = '600 13px Arial';
+        ctx.textAlign = 'left';
+        const title_text = t.title.length > 38 ? t.title.slice(0, 38) + '…' : t.title;
+        ctx.fillText(title_text, tx + 40, ty + 17);
+
+        // Client + dates row
+        ctx.fillStyle = '#9090AA';
+        ctx.font = '11px Arial';
+        let info = '';
+        if (t.client_name) info += '🏢 ' + t.client_name;
+        if (t.post_date)   info += (info?' · ':'') + '📤 ' + String(t.post_date).slice(0,10);
+        if (t.deadline)    info += (info?' · ':'') + (overdue?'❗':'⏰ ') + String(t.deadline).slice(0,10);
+        ctx.fillText(info || 'No date set', tx + 8, ty + 40);
+      });
+
+      if (tasks.length === 0) {
+        ctx.fillStyle = '#6B6B8A';
+        ctx.font = '13px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Nothing here', x + COL_W / 2, HEADER_H + PAD + 90);
+      }
+    }
+
+    drawColumn('📋 TO DO', '#9090AA', todo, PAD);
+    drawColumn('⚡ IN PROGRESS', '#00D4FF', inprogress, PAD + COL_W + COL_GAP);
+
+    // Footer
+    ctx.fillStyle = '#3A3A50';
+    ctx.fillRect(0, H - 22, W, 22);
+    ctx.fillStyle = '#6B6B8A';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Generated by Your Socials OS — ' + new Date().toLocaleString('en-IN'), W / 2, H - 8);
+
+    // Download
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = (member.name || 'member').replace(/ /g, '-') + '-tasks-' + new Date().toISOString().slice(0,10) + '.png';
+    a.click();
+    toast.success('Exported ' + (member.name?.split(' ')[0] || 'member') + "'s board as image 🖼️");
+  }
+
+  // Export ALL members as one combined image
+  async function exportAllMembersImage() {
+    toast.info('Generating team board image…');
+    setTimeout(async () => {
+      for (const m of displayMembers) {
+        await exportMemberImage(m);
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }, 100);
+  }
+
   function openEditProfile() {
     const me = members.find(m => m.email === session?.user?.email);
     setForm({ job_title: me?.job_title || session?.user?.job_title || '', image: me?.image || '' });
@@ -102,6 +278,9 @@ export default function Team() {
               ))}
             </div>
             <Btn variant="ghost" onClick={openEditProfile}>✏️ My Profile</Btn>
+            {view === 'board' && (
+              <Btn variant="ghost" onClick={exportAllMembersImage}>📸 Export All</Btn>
+            )}
           </div>
         </div>
 
@@ -158,6 +337,7 @@ export default function Team() {
                         </div>
                       ) : null)}
                     </div>
+                    <Btn variant="ghost" size="sm" onClick={() => exportMemberImage(m)} style={{marginLeft:8,padding:'4px 10px',fontSize:'.72rem'}}>📸</Btn>
                   </div>
 
                   {/* Two columns: To Do + In Progress */}
