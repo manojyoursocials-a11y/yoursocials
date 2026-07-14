@@ -104,11 +104,21 @@ export default function Team() {
     const dateStr = new Date().toLocaleDateString('en-IN', {weekday:'short',day:'numeric',month:'short',year:'numeric'});
     ctx.fillText(dateStr, W - PAD, 14);
 
-    // Watermark
-    ctx.fillStyle = '#F0EFFF';
-    ctx.font = 'bold 11px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillText('YOUR SOCIALS OS', PAD, 14);
+    // Centered logo image
+    await new Promise(resolve => {
+      const logo = new Image();
+      logo.onload = () => {
+        // Draw logo centered in header strip, vertically centered
+        const logoH = 32;
+        const logoW = Math.round(logo.naturalWidth * logoH / logo.naturalHeight);
+        const logoX = Math.round((W - logoW) / 2);
+        const logoY = Math.round((HEADER_H - logoH) / 2);
+        ctx.drawImage(logo, logoX, logoY, logoW, logoH);
+        resolve();
+      };
+      logo.onerror = () => resolve(); // skip if logo fails
+      logo.src = '/logo.png';
+    });
 
     // Draw columns
     function drawColumn(title, colColor, tasks, x) {
@@ -188,6 +198,7 @@ export default function Team() {
       }
     }
 
+    // Draw columns (after logo loads)
     drawColumn('📋 TO DO', '#9090AA', todo, PAD);
     drawColumn('⚡ IN PROGRESS', '#00D4FF', inprogress, PAD + COL_W + COL_GAP);
 

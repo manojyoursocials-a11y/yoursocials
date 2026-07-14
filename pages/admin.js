@@ -530,10 +530,20 @@ export default function Admin() {
                       onMouseUp={()=>saveNotifSettings({volume:notifSettings.volume})}
                       onTouchEnd={()=>saveNotifSettings({volume:notifSettings.volume})}
                       style={{width:'100%',accentColor:'#1a73e8',cursor:'pointer',marginBottom:10}}/>
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     <button onClick={testSound} disabled={testPlaying}
                       style={{display:'flex',alignItems:'center',gap:7,padding:'7px 16px',background:testPlaying?'rgba(255,255,255,.06)':'var(--surface3)',border:'1px solid var(--border2)',borderRadius:8,color:testPlaying?'var(--muted)':'var(--text)',fontSize:'.82rem',fontWeight:600,cursor:testPlaying?'default':'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
                       {testPlaying?<>🔊 Playing…</>:<>▶ Test sound</>}
                     </button>
+                    <button onClick={async()=>{
+                      const r=await fetch('/api/test-notif',{method:'POST'});
+                      const d=await r.json();
+                      if(d.ok) toast.success('Test notification sent to all '+d.sent_to+' members! Check the bell icon.');
+                      else toast.error(d.error);
+                    }} style={{display:'flex',alignItems:'center',gap:7,padding:'7px 16px',background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.3)',borderRadius:8,color:'var(--purple2)',fontSize:'.82rem',fontWeight:700,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                      🔔 Send Test Notification to All
+                    </button>
+                  </div>
                   </div>
                 )}
               </div>
