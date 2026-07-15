@@ -1,4 +1,3 @@
-// Debug endpoint — sends a real test notification to the current user
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../lib/auth';
 import { getDb } from '../../lib/db';
@@ -10,31 +9,19 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
   const db = getDb();
 
-  try {
-    // Insert a real notification for the calling user
+  const users = await db.getUsers();
+  const notifId = uuid();
+  const now = new Date().toISOString();
+  
+  for (const u of users) {
     await db.createNotification({
       id:      uuid(),
-      user_id: session.user.id,
+      user_id: u.id,
       type:    'task_assigned',
-      title:   '🔔 Test notification',
-      body:    'Notifications are working! Sound + popup should have fired.',
+      title:   '🔔 Test — ' + now.slice(11,19),
+      body:    (session.user.name || 'Admin') + ' sent a test notification to everyone',
       task_id: null,
     });
-    // Also send to ALL users so the whole team can verify
-    const users = await db.getUsers();
-    for (const u of users) {
-      if (u.id === session.user.id) continue;
-      await db.createNotification({
-        id:      uuid(),
-        user_id: u.id,
-        type:    'task_assigned',
-        title:   '🔔 Test from ' + (session.user.name || 'Admin'),
-        body:    'Notification test — if you see this, notifications are working!',
-        task_id: null,
-      });
-    }
-    return res.json({ ok: true, sent_to: users.length });
-  } catch(e) {
-    return res.status(500).json({ error: e.message });
   }
+  return res.json({ ok: true, sent_to: users.length, at: now });
 }
