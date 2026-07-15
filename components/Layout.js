@@ -20,6 +20,16 @@ const NAV = [
 ];
 
 // Live coins — polls /api/me every 8s so coins update without re-login
+// Quick notify-all function
+async function sendTestToAll() {
+  try {
+    const r = await fetch('/api/test-notif', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) alert('✅ Test notification sent to all ' + d.sent_to + ' members! They should hear sound + see popup within 4 seconds.');
+    else alert('❌ Error: ' + (d.error || 'Unknown'));
+  } catch(e) { alert('❌ ' + e.message); }
+}
+
 function useLiveCoins(sessionCoins) {
   const [coins, setCoins] = useState(sessionCoins || 0);
   useEffect(() => {

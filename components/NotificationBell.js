@@ -184,7 +184,8 @@ export default function NotificationBell() {
       const r = await fetch('/api/notifications');
       if (!r.ok) { setLoading(false); return; }
       const d = await r.json();
-      setNotifs(Array.isArray(d.notifications) ? d.notifications : []);
+      const notifList = Array.isArray(d.notifications) ? d.notifications : [];
+      setNotifs(notifList);
       const cnt = d.unread || 0;
       setUnread(cnt);
       prevCount.current = cnt;
@@ -200,21 +201,21 @@ export default function NotificationBell() {
       if (!r.ok) return;
       const d = await r.json();
 
-      // CRITICAL: advance since BEFORE processing
+      // Advance since pointer
       sinceRef.current = new Date().toISOString();
 
       const fresh = Array.isArray(d.notifications) ? d.notifications : [];
       const count = typeof d.unread === 'number' ? d.unread : 0;
 
       if (fresh.length > 0) {
-        // Play sound + show toasts for new ones
-        if (count > prevCount.current) {
-          playNotifSound();
-          fresh.forEach(n => {
-            showToast(n);
-            sendOSNotif(n.title, n.body, n.id);
-          });
-        }
+        // ALWAYS play sound + show toasts when there are NEW notifications
+        // (regardless of prevCount — the since pointer guarantees these are new)
+        playNotifSound();
+        fresh.forEach(n => {
+          showToast(n);
+          sendOSNotif(n.title, n.body, n.id);
+        });
+
         // Add to notification list
         setNotifs(prev => {
           const ids = new Set(prev.map(n => n.id));
