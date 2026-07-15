@@ -178,11 +178,19 @@ export default function Layout({ children, badges = {} }) {
             <span className="live-dot"/>
             <span style={{ fontSize:'.75rem', color:'var(--muted)', fontWeight:500 }}>Live</span>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
             <span style={{ color:'var(--yellow)', fontWeight:700, fontSize:'.82rem' }}>🪙 {liveCoins.toLocaleString()}</span>
-            <span style={{ fontSize:'.75rem', color:'var(--muted2)' }}>
-  <LiveClock />
-            </span>
+            <span style={{ fontSize:'.75rem', color:'var(--muted2)' }}><LiveClock /></span>
+            {isAdmin && (
+              <button
+                onClick={sendTestToAll}
+                title="Send test notification to all team members"
+                style={{ background:'rgba(124,92,252,.18)', border:'1px solid rgba(124,92,252,.4)', borderRadius:8, padding:'5px 11px', color:'#A78BFA', cursor:'pointer', fontSize:'.72rem', fontWeight:700, fontFamily:'Inter,sans-serif', display:'flex', alignItems:'center', gap:5 }}
+              >
+                🔔 Notify All
+              </button>
+            )}
+            <NotificationBell/>
           </div>
         </div>
 

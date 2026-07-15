@@ -594,6 +594,69 @@ export default function Admin() {
               ))}
             </div>
 
+            {/* ── WEB PUSH SUBSCRIPTION STATUS ── */}
+            <div style={{marginBottom:20}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                <div style={{width:40,height:40,borderRadius:12,background:'rgba(0,212,255,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>📲</div>
+                <div>
+                  <h3 style={{fontWeight:900,fontSize:'1rem',margin:0}}>Web Push Notifications</h3>
+                  <p style={{fontSize:'.76rem',color:'var(--muted2)',margin:0,marginTop:2}}>True OS-level push — works even when browser is closed</p>
+                </div>
+              </div>
+
+              <div style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,overflow:'hidden',marginBottom:14}}>
+                <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',background:'var(--surface3)'}}>
+                  <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:3}}>How to enable for team members</div>
+                  <div style={{fontSize:'.78rem',color:'var(--muted2)',lineHeight:1.6}}>
+                    Each team member opens the app → browser asks <strong>"Allow notifications?"</strong> → click Allow. They are then automatically subscribed to Web Push.
+                  </div>
+                </div>
+                <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:'.88rem',marginBottom:2}}>My browser subscription</div>
+                    <div style={{fontSize:'.75rem',color:'var(--muted2)'}}>{permState==='granted'?'✅ Subscribed — you will receive OS popups':'Click to subscribe this browser'}</div>
+                  </div>
+                  {permState!=='granted'?(
+                    <Btn onClick={requestPushPermission}>Subscribe Now</Btn>
+                  ):(
+                    <span style={{fontSize:'.75rem',color:'var(--green)',fontWeight:700}}>✅ Active</span>
+                  )}
+                </div>
+                <div style={{padding:'14px 20px'}}>
+                  <div style={{fontWeight:600,fontSize:'.88rem',marginBottom:12}}>Send a push to all subscribers</div>
+                  <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                    <input
+                      placeholder="Notification title (e.g. Team Meeting at 3pm)"
+                      id="push-title"
+                      style={{background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:10,padding:'10px 14px',fontSize:'.85rem',color:'var(--text)',fontFamily:'Inter,sans-serif',width:'100%',boxSizing:'border-box'}}
+                    />
+                    <input
+                      placeholder="Message body (optional)"
+                      id="push-body"
+                      style={{background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:10,padding:'10px 14px',fontSize:'.85rem',color:'var(--text)',fontFamily:'Inter,sans-serif',width:'100%',boxSizing:'border-box'}}
+                    />
+                    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                      <Btn onClick={async()=>{
+                        const title=document.getElementById('push-title')?.value?.trim();
+                        const body=document.getElementById('push-body')?.value?.trim();
+                        if(!title){toast.error('Enter a title');return;}
+                        const r=await fetch('/api/push-send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,body})});
+                        const d=await r.json();
+                        if(d.ok) toast.success('Sent to '+d.sent+' devices! '+d.failed+' failed.');
+                        else toast.error(d.error||'Failed');
+                      }}>📲 Send Web Push to All</Btn>
+                      <Btn variant="ghost" onClick={async()=>{
+                        const r=await fetch('/api/test-notif',{method:'POST'});
+                        const d=await r.json();
+                        if(d.ok) toast.success('In-app test sent to '+d.sent_to+' members — check bell icon!');
+                        else toast.error(d.error||'Failed');
+                      }}>🔔 Send In-App Test to All</Btn>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div style={{fontSize:'.74rem',color:'var(--muted2)',lineHeight:1.7,padding:'0 4px',marginBottom:28}}>
               💡 Personal settings above are saved in this browser only. Global settings below apply to all team members.
             </div>
