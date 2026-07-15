@@ -8,24 +8,43 @@ const EMOJI = {
   client_deleted:'🏢',
 };
 
-// ─── Sound via AudioContext ──────────────────────────────────
+// ─── Sound — multiple fallback strategies ──────────────────
+// Strategy: keep a pre-loaded Audio element ready, play on demand.
+// AudioContext is used as fallback because it handles background tabs better.
+let _preloaded = null;
 let _ctx = null, _buf = null;
-async function loadSound() {
-  if (_buf) return;
-  try {
-    _ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const r  = await fetch('/notification.mp3');
-    const ab = await r.arrayBuffer();
-    _buf     = await _ctx.decodeAudioData(ab);
-  } catch(e) {}
+
+// Call this on first user gesture to unlock audio
+function unlockAudio() {
+  // Pre-load HTML5 audio element
+  if (!_preloaded) {
+    _preloaded = new Audio('/notification.mp3');
+    _preloaded.preload = 'auto';
+    _preloaded.load();
+  }
+  // Also prime AudioContext
+  if (!_ctx) {
+    try {
+      _ctx = new (window.AudioContext || window.webkitAudioContext)();
+      fetch('/notification.mp3')
+        .then(r => r.arrayBuffer())
+        .then(ab => _ctx.decodeAudioData(ab))
+        .then(buf => { _buf = buf; })
+        .catch(() => {});
+    } catch(e) {}
+  } else if (_ctx.state === 'suspended') {
+    _ctx.resume();
+  }
 }
+
 function playSound() {
   try {
     const s = JSON.parse(localStorage.getItem('ys_notif_settings') || '{}');
     if (s.soundEnabled === false) return;
     const vol = Math.min(1, (s.volume || 90) / 100);
-    if (_ctx && _buf) {
-      if (_ctx.state === 'suspended') _ctx.resume();
+
+    // Try AudioContext first (works in background tabs)
+    if (_ctx && _buf && _ctx.state !== 'suspended') {
       const src  = _ctx.createBufferSource();
       const gain = _ctx.createGain();
       src.buffer      = _buf;
@@ -33,11 +52,21 @@ function playSound() {
       src.connect(gain);
       gain.connect(_ctx.destination);
       src.start(0);
-    } else {
-      const a = new Audio('/notification.mp3');
-      a.volume = vol;
-      a.play().catch(() => {});
+      return;
     }
+
+    // Fallback 1: pre-loaded element
+    if (_preloaded) {
+      _preloaded.volume = vol;
+      _preloaded.currentTime = 0;
+      const p = _preloaded.play();
+      if (p) { p.catch(() => {}); return; }
+    }
+
+    // Fallback 2: fresh Audio element (always works if user has interacted)
+    const a = new Audio('/notification.mp3');
+    a.volume = vol;
+    a.play().catch(() => {});
   } catch(e) {}
 }
 
@@ -139,11 +168,11 @@ export default function NotificationBell() {
     }
 
     // Load audio on first gesture
-    const unlock = () => loadSound();
-    window.addEventListener('click',      unlock, { once: true, passive: true });
-    window.addEventListener('keydown',    unlock, { once: true, passive: true });
-    window.addEventListener('touchstart', unlock, { once: true, passive: true });
-    loadSound(); // try immediately
+    const unlock = () => unlockAudio();
+    window.addEventListener('click',      unlock, { once: false, passive: true });
+    window.addEventListener('keydown',    unlock, { once: false, passive: true });
+    window.addEventListener('touchstart', unlock, { once: false, passive: true });
+    unlockAudio(); // try immediately
 
     // Close panel on outside click
     const outside = e => { if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false); };

@@ -1,0 +1,23 @@
+{
+  "name": "Your Socials OS",
+  "short_name": "YourSocials",
+  "description": "AI-powered team performance OS for social media agencies",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090F",
+  "theme_color": "#7C5CFC",
+  "orientation": "any",
+  "icons": [
+    { "src": "/favicon-16.png",  "sizes": "16x16",   "type": "image/png" },
+    { "src": "/favicon-32.png",  "sizes": "32x32",   "type": "image/png" },
+    { "src": "/favicon-48.png",  "sizes": "48x48",   "type": "image/png" },
+    { "src": "/favicon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/favicon-180.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon-180.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "screenshots": [
+    { "src": "/favicon-180.png", "sizes": "180x180", "type": "image/png", "form_factor": "wide" }
+  ],
+  "categories": ["productivity", "business"],
+  "prefer_related_applications": false
+}
