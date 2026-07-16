@@ -6,166 +6,157 @@ import Layout from '../components/Layout';
 export default function ChatPage() {
   const { status } = useSession();
   const router = useRouter();
-  const [googleSignedIn, setGoogleSignedIn] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const iframeRef = useRef(null);
+  const chatWindowRef = useRef(null);
+  const [windowOpen, setWindowOpen] = useState(false);
+  const [account, setAccount] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
   }, [status]);
 
-  // Check if Google session cookie exists by pinging a Google endpoint
-  useEffect(() => {
-    // We open a hidden iframe to test if Google session is active
-    const test = document.createElement('iframe');
-    test.src = 'https://accounts.google.com/CheckCookie?continue=https://www.google.com&followup=https://www.google.com&chtml=LoginDoneHtml';
-    test.style.display = 'none';
-    test.onload = () => {
-      // If they have a Google session, assume signed in
-      setGoogleSignedIn(true);
-      setCheckingAuth(false);
-    };
-    test.onerror = () => {
-      setGoogleSignedIn(false);
-      setCheckingAuth(false);
-    };
-    // Fallback — stop checking after 3s
-    setTimeout(() => setCheckingAuth(false), 3000);
-    document.body.appendChild(test);
-    return () => { try { document.body.removeChild(test); } catch(e) {} };
-  }, []);
-
-  function openGoogleSignIn() {
-    // Open Google sign-in in a popup window
-    const w = window.open(
-      'https://accounts.google.com/signin/v2/identifier?continue=https://chat.google.com&hl=en',
-      'google-signin',
-      'width=500,height=600,left=400,top=100,toolbar=no,menubar=no'
+  function openChat(url) {
+    if (chatWindowRef.current && !chatWindowRef.current.closed) {
+      chatWindowRef.current.focus();
+      chatWindowRef.current.location.href = url || 'https://chat.google.com';
+      return;
+    }
+    // Open Google Chat as a popup window sized to half the screen
+    const w = Math.floor(window.screen.width * 0.55);
+    const h = window.screen.height;
+    const left = window.screen.width - w;
+    chatWindowRef.current = window.open(
+      url || 'https://chat.google.com',
+      'google-chat-window',
+      `width=${w},height=${h},left=${left},top=0,toolbar=no,menubar=no,location=yes,status=no`
     );
-    // Watch for popup to close, then show chat
-    const timer = setInterval(() => {
-      if (w && w.closed) {
-        clearInterval(timer);
-        setGoogleSignedIn(true);
-        // Reload iframe
-        if (iframeRef.current) {
-          iframeRef.current.src = iframeRef.current.src;
+    if (chatWindowRef.current) {
+      setWindowOpen(true);
+      const check = setInterval(() => {
+        if (chatWindowRef.current?.closed) {
+          clearInterval(check);
+          setWindowOpen(false);
         }
-      }
-    }, 500);
+      }, 1000);
+    }
   }
 
-  if (status === 'loading' || status === 'unauthenticated') return null;
+  function switchAccount() {
+    openChat('https://accounts.google.com/AccountChooser?continue=https://chat.google.com');
+  }
+
+  function closeChat() {
+    if (chatWindowRef.current && !chatWindowRef.current.closed) {
+      chatWindowRef.current.close();
+    }
+    setWindowOpen(false);
+  }
+
+  const SPACES = [
+    { name: 'Fattoush SM Marketing', color: '#00AC47', initial: 'F', url: 'https://chat.google.com' },
+    { name: 'beWAXed',               color: '#9C27B0', initial: 'b', url: 'https://chat.google.com' },
+    { name: 'Sewaro Craft Salon',    color: '#EA4335', initial: 'S', url: 'https://chat.google.com' },
+    { name: 'Tip & Toe – Chennai',   color: '#FF6D00', initial: 'T', url: 'https://chat.google.com' },
+    { name: 'Sagar Rehab',           color: '#1A73E8', initial: 'S', url: 'https://chat.google.com' },
+    { name: 'Scale Up',              color: '#FBBC04', initial: 'S', url: 'https://chat.google.com' },
+    { name: 'ARC Foods and Beverages', color: '#00BCD4', initial: 'A', url: 'https://chat.google.com' },
+    { name: 'Your Socials',          color: '#E91E63', initial: 'Y', url: 'https://chat.google.com' },
+  ];
+
+  if (status !== 'authenticated') return null;
 
   return (
-    <Layout noPadding>
-      <div style={{ display:'flex', flexDirection:'column', height:'calc(100dvh - 60px)', overflow:'hidden' }}>
-
-        {/* Header bar */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px', background:'var(--surface)', borderBottom:'1px solid var(--border)', flexShrink:0, gap:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <img
-              src="https://www.gstatic.com/images/branding/product/2x/chat_2023_48dp.png"
-              width={24} height={24} alt="Google Chat"
-              style={{ borderRadius:4 }}
-              onError={e => { e.target.style.display='none'; }}
-            />
-            <span style={{ fontWeight:800, fontSize:'.92rem' }}>Google Chat</span>
-            {googleSignedIn && (
-              <span style={{ fontSize:'.65rem', background:'rgba(0,172,71,.15)', color:'#00AC47', padding:'2px 9px', borderRadius:20, fontWeight:700 }}>
-                ● Connected
-              </span>
-            )}
+    <Layout>
+      <div className="fade-up">
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24, flexWrap:'wrap', gap:12 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:42, height:42, borderRadius:12, background:'linear-gradient(135deg,#00AC47,#1A73E8)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem' }}>💬</div>
+            <div>
+              <h2 style={{ fontWeight:900, fontSize:'1.15rem', margin:0 }}>Google Chat</h2>
+              <p style={{ fontSize:'.78rem', color:'var(--muted2)', margin:0 }}>Opens in a separate window alongside this app</p>
+            </div>
           </div>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            {!googleSignedIn && !checkingAuth && (
-              <button onClick={openGoogleSignIn}
-                style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 16px', background:'#fff', border:'1px solid #dadce0', borderRadius:8, cursor:'pointer', fontFamily:'Google Sans, Arial, sans-serif', fontSize:'.82rem', fontWeight:600, color:'#3c4043' }}>
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={16} height={16} alt="Google"/>
-                Sign in with Google
+          <div style={{ display:'flex', gap:8 }}>
+            {windowOpen && (
+              <>
+                <button onClick={switchAccount}
+                  style={{ padding:'8px 16px', background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:9, color:'var(--muted2)', cursor:'pointer', fontSize:'.82rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>
+                  🔄 Switch Account
+                </button>
+                <button onClick={() => chatWindowRef.current?.focus()}
+                  style={{ padding:'8px 16px', background:'rgba(0,172,71,.15)', border:'1px solid rgba(0,172,71,.3)', borderRadius:9, color:'#00AC47', cursor:'pointer', fontSize:'.82rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>
+                  ● Focus Chat Window
+                </button>
+                <button onClick={closeChat}
+                  style={{ padding:'8px 16px', background:'rgba(234,67,53,.1)', border:'1px solid rgba(234,67,53,.25)', borderRadius:9, color:'#EA4335', cursor:'pointer', fontSize:'.82rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>
+                  ✕ Close
+                </button>
+              </>
+            )}
+            {!windowOpen && (
+              <button onClick={() => openChat()}
+                style={{ padding:'9px 22px', background:'linear-gradient(135deg,#00AC47,#1A73E8)', border:'none', borderRadius:10, color:'#fff', cursor:'pointer', fontSize:'.88rem', fontWeight:700, fontFamily:'Inter,sans-serif', display:'flex', alignItems:'center', gap:8 }}>
+                💬 Open Google Chat
               </button>
             )}
-            {googleSignedIn && (
-              <button onClick={openGoogleSignIn}
-                style={{ padding:'5px 12px', background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, color:'var(--muted2)', fontSize:'.75rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                Switch account
-              </button>
-            )}
-            <a href="https://chat.google.com" target="_blank" rel="noopener noreferrer"
-              style={{ padding:'5px 12px', background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, color:'var(--muted2)', fontSize:'.75rem', fontWeight:600, textDecoration:'none', fontFamily:'inherit' }}>
-              ↗ Full screen
-            </a>
           </div>
         </div>
 
-        {/* Main area */}
-        <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
+        {/* Status banner */}
+        {windowOpen && (
+          <div style={{ background:'rgba(0,172,71,.08)', border:'1px solid rgba(0,172,71,.2)', borderRadius:12, padding:'12px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
+            <span style={{ fontSize:'1rem' }}>✅</span>
+            <div>
+              <div style={{ fontWeight:700, fontSize:'.88rem', color:'#00AC47' }}>Google Chat is open</div>
+              <div style={{ fontSize:'.78rem', color:'var(--muted2)' }}>It's running in a separate window. Click any space below to jump straight to it, or click "Focus Chat Window" to bring it to front.</div>
+            </div>
+          </div>
+        )}
 
-          {/* Not signed in */}
-          {!checkingAuth && !googleSignedIn && (
-            <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:24, padding:32, textAlign:'center', zIndex:10, background:'var(--surface)' }}>
-              <img src="https://www.gstatic.com/images/branding/product/2x/chat_2023_48dp.png"
-                width={64} height={64} style={{ borderRadius:16 }}
-                onError={e=>e.target.style.display='none'}/>
-              <div>
-                <div style={{ fontWeight:900, fontSize:'1.3rem', marginBottom:8 }}>Sign in to Google Chat</div>
-                <div style={{ fontSize:'.88rem', color:'var(--muted2)', lineHeight:1.7, maxWidth:380 }}>
-                  Sign in with your Google account to access all your Spaces — Fattoush SM Marketing, BeWAXed, Sewaro Craft Salon, Scale Up and more.
+        {/* Quick launch grid */}
+        <div style={{ marginBottom:28 }}>
+          <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:14 }}>Your Spaces — click to open</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:10 }}>
+            {SPACES.map(space => (
+              <button key={space.name} onClick={() => openChat(space.url)}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12, cursor:'pointer', fontFamily:'Inter,sans-serif', textAlign:'left', transition:'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = space.color; e.currentTarget.style.background = space.color + '11'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--surface2)'; }}>
+                <div style={{ width:38, height:38, borderRadius:10, background:space.color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.9rem', flexShrink:0 }}>
+                  {space.initial}
                 </div>
-              </div>
-
-              <button onClick={openGoogleSignIn}
-                style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 28px', background:'#fff', border:'2px solid #dadce0', borderRadius:12, cursor:'pointer', fontFamily:'Google Sans, Arial, sans-serif', fontSize:'.95rem', fontWeight:600, color:'#3c4043', boxShadow:'0 2px 8px rgba(0,0,0,.12)' }}>
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={22} height={22} alt="Google"/>
-                Sign in with Google
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:'.85rem', color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{space.name}</div>
+                  <div style={{ fontSize:'.7rem', color:'var(--muted2)', marginTop:2 }}>Click to open in Google Chat</div>
+                </div>
+                <span style={{ marginLeft:'auto', fontSize:'.75rem', color:space.color, flexShrink:0 }}>↗</span>
               </button>
+            ))}
+          </div>
+        </div>
 
-              {/* Spaces preview */}
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center', maxWidth:520 }}>
-                {['Fattoush SM Marketing','BeWAXed','Sewaro Craft Salon','Tip & Toe – Chennai','Scale Up','Sagar Rehab'].map((name, i) => {
-                  const colors = ['#00AC47','#EA4335','#9C27B0','#FF6D00','#1A73E8','#FBBC04'];
-                  return (
-                    <div key={name} style={{ display:'flex', alignItems:'center', gap:7, padding:'6px 12px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:20 }}>
-                      <div style={{ width:18, height:18, borderRadius:5, background:colors[i%colors.length], display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'.6rem', fontWeight:800 }}>
-                        {name[0]}
-                      </div>
-                      <span style={{ fontSize:'.75rem', color:'var(--muted2)', fontWeight:500 }}>{name}</span>
-                    </div>
-                  );
-                })}
-              </div>
+        {/* Switch account section */}
+        <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:14, padding:'18px 22px', marginBottom:20 }}>
+          <div style={{ fontWeight:700, fontSize:'.9rem', marginBottom:6 }}>🔄 Switch Google Account</div>
+          <div style={{ fontSize:'.8rem', color:'var(--muted2)', lineHeight:1.6, marginBottom:14 }}>
+            If you need to use a different Google account for Google Chat, click below. A window will open for you to switch accounts — your changes apply to the chat window.
+          </div>
+          <button onClick={switchAccount}
+            style={{ display:'inline-flex', alignItems:'center', gap:9, padding:'9px 20px', background:'#fff', border:'1.5px solid #dadce0', borderRadius:9, cursor:'pointer', fontFamily:'Google Sans, Inter, sans-serif', fontSize:'.85rem', fontWeight:600, color:'#3c4043' }}>
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={18} height={18} alt="" onError={e=>e.target.style.display='none'}/>
+            Switch Google Account
+          </button>
+        </div>
 
-              <div style={{ fontSize:'.75rem', color:'var(--muted)', lineHeight:1.6, maxWidth:360, marginTop:-8 }}>
-                A popup will open to sign you in to Google. Once done, Google Chat loads right here inside Your Socials OS.
-              </div>
-            </div>
-          )}
-
-          {/* Loading */}
-          {checkingAuth && (
-            <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', gap:12, color:'var(--muted2)', fontSize:'.88rem', background:'var(--surface)', zIndex:10 }}>
-              <span style={{ fontSize:'1.5rem', animation:'spin 1s linear infinite' }}>⟳</span>
-              Checking Google session…
-            </div>
-          )}
-
-          {/* Google Chat iframe — always rendered, hidden until signed in */}
-          <iframe
-            ref={iframeRef}
-            src="https://chat.google.com"
-            style={{ width:'100%', height:'100%', border:'none', display: googleSignedIn ? 'block' : 'none' }}
-            allow="camera; microphone; clipboard-read; clipboard-write; notifications; autoplay"
-            title="Google Chat"
-            onLoad={() => {
-              if (!checkingAuth) setGoogleSignedIn(true);
-            }}
-          />
+        {/* How to use tip */}
+        <div style={{ background:'rgba(26,115,232,.06)', border:'1px solid rgba(26,115,232,.2)', borderRadius:12, padding:'14px 18px' }}>
+          <div style={{ fontWeight:700, fontSize:'.82rem', color:'#8ab4f8', marginBottom:8 }}>💡 Pro tip — snap windows side by side</div>
+          <div style={{ fontSize:'.78rem', color:'var(--muted2)', lineHeight:1.7 }}>
+            On Windows: drag Your Socials to the left half of screen (Win+← key) and Google Chat window snaps to the right half automatically.<br/>
+            On Mac: hover over the green dot on either window → choose "Tile Window to Left/Right of Screen".
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-      `}</style>
     </Layout>
   );
 }
