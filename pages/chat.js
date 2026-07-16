@@ -1,306 +1,409 @@
-import { useSession } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Layout from '../components/Layout';
+import { Avatar, Spinner, MEMBER_COLORS } from '../components/UI';
 
-const SPACES = [
-  { name: 'Fattoush SM Marketing',   color: '#00AC47', initial: 'F' },
-  { name: 'beWAXed',                 color: '#9C27B0', initial: 'b' },
-  { name: 'Sewaro Craft Salon',      color: '#EA4335', initial: 'S' },
-  { name: 'Tip & Toe – Chennai',     color: '#FF6D00', initial: 'T' },
-  { name: 'Sagar Rehab',             color: '#1A73E8', initial: 'S' },
-  { name: 'Scale Up',                color: '#FBBC04', initial: 'S' },
-  { name: 'ARC Foods and Beverages', color: '#00BCD4', initial: 'A' },
-  { name: 'Your Socials',            color: '#E91E63', initial: 'Y' },
-  { name: 'FactoryFeed Daily Sync',  color: '#795548', initial: 'F' },
-  { name: 'FactoryFeed Social Media',color: '#607D8B', initial: 'F' },
-  { name: 'Reports, Leave & Attendance', color: '#FF5722', initial: 'R' },
-  { name: 'MY PERSONAL SPACE',       color: '#FFC107', initial: 'M' },
-];
+async function gchat(endpoint, method='GET', body) {
+  const r = await fetch('/api/google-chat?endpoint=' + encodeURIComponent(endpoint), {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return r.json();
+}
 
-export default function ChatPage() {
-  const { status } = useSession();
+function timeAgo(iso) {
+  if (!iso) return '';
+  const m = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm';
+  if (m < 1440) return Math.floor(m/60) + 'h';
+  return Math.floor(m/1440) + 'd';
+}
+
+function fullTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+}
+
+export default function Chat() {
+  const { data: session, status } = useSession();
   const router = useRouter();
-  const chatWindowRef = useRef(null);
-  const [windowOpen, setWindowOpen] = useState(false);
-  const [googleAccount, setGoogleAccount] = useState('');
-  const [showAccountInput, setShowAccountInput] = useState(false);
-  const [accountInput, setAccountInput] = useState('');
+
+  const isGoogleSignedIn = !!(session?.googleAccessToken);
+  const hasAppSession    = status === 'authenticated';
+
+  const [spaces,      setSpaces]      = useState([]);
   const [activeSpace, setActiveSpace] = useState(null);
-  const [view, setView] = useState('spaces'); // spaces | dm | files
+  const [messages,    setMessages]    = useState([]);
+  const [members,     setMembers]     = useState([]);
+  const [text,        setText]        = useState('');
+  const [sending,     setSending]     = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [loadMsgs,    setLoadMsgs]    = useState(false);
+  const [view,        setView]        = useState('spaces');
+  const [search,      setSearch]      = useState('');
+  const [mediaFile,   setMediaFile]   = useState(null);
+
+  const sinceRef  = useRef(null);
+  const pollRef   = useRef(null);
+  const bottomRef = useRef(null);
+  const fileRef   = useRef(null);
+  const inputRef  = useRef(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
-    // Load saved account
-    const saved = localStorage.getItem('ys_google_account');
-    if (saved) setGoogleAccount(saved);
   }, [status]);
 
-  function openChat(spaceName) {
-    const url = 'https://chat.google.com';
-    setActiveSpace(spaceName || null);
-    if (chatWindowRef.current && !chatWindowRef.current.closed) {
-      chatWindowRef.current.focus();
-      chatWindowRef.current.location.href = url;
-      return;
-    }
-    const w = Math.floor(window.screen.width * 0.55);
-    const h = window.screen.height;
-    const left = window.screen.width - w;
-    chatWindowRef.current = window.open(
-      url, 'google-chat-window',
-      `width=${w},height=${h},left=${left},top=0,toolbar=no,menubar=no,location=yes`
-    );
-    if (chatWindowRef.current) {
-      setWindowOpen(true);
-      const check = setInterval(() => {
-        if (chatWindowRef.current?.closed) {
-          clearInterval(check); setWindowOpen(false); setActiveSpace(null);
+  // Load Google Chat spaces when Google signed in
+  const loadSpaces = useCallback(async () => {
+    if (!isGoogleSignedIn) return;
+    setLoading(true);
+    try {
+      const d = await gchat('spaces?filter=spaceType%3DSPACE&pageSize=50');
+      if (d.spaces) setSpaces(d.spaces);
+    } catch(e) {}
+    setLoading(false);
+  }, [isGoogleSignedIn]);
+
+  useEffect(() => { if (isGoogleSignedIn) loadSpaces(); }, [isGoogleSignedIn, loadSpaces]);
+
+  // Open a space and load messages
+  async function openSpace(space) {
+    setActiveSpace(space);
+    setMessages([]);
+    setLoadMsgs(true);
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    try {
+      const name = space.name; // e.g. "spaces/XXXX"
+      const d = await gchat(name + '/messages?pageSize=50&orderBy=createTime');
+      setMessages(Array.isArray(d.messages) ? d.messages.reverse() : []);
+    } catch(e) {}
+    setLoadMsgs(false);
+
+    sinceRef.current = new Date().toISOString();
+    pollRef.current = setInterval(async () => {
+      if (!sinceRef.current || !space?.name) return;
+      try {
+        const filter = encodeURIComponent('createTime > "' + sinceRef.current + '"');
+        const d = await gchat(space.name + '/messages?filter=' + filter + '&orderBy=createTime');
+        sinceRef.current = new Date().toISOString();
+        if (d.messages?.length) {
+          setMessages(prev => {
+            const ids = new Set(prev.map(m => m.name));
+            return [...prev, ...d.messages.filter(m => !ids.has(m.name))];
+          });
         }
-      }, 800);
-    }
+      } catch(e) {}
+    }, 5000);
   }
 
-  function switchAccount() {
-    const w = window.open(
-      'https://accounts.google.com/AccountChooser?continue=https://chat.google.com',
-      'google-account', 'width=500,height=600,left=400,top=80'
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Send message
+  async function send() {
+    const content = text.trim();
+    if (!content && !mediaFile) return;
+    if (!activeSpace) return;
+    setSending(true);
+    try {
+      const msg = await gchat(activeSpace.name + '/messages', 'POST', {
+        text: content || undefined,
+      });
+      if (msg.name) {
+        setMessages(prev => [...prev, msg]);
+        setText('');
+      }
+    } catch(e) {}
+    setSending(false);
+    inputRef.current?.focus();
+  }
+
+  function onKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  const filteredSpaces = spaces.filter(s =>
+    !search || (s.displayName || s.name).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const SPACE_COLORS = ['#00AC47','#1A73E8','#EA4335','#FBBC04','#9C27B0','#FF6D00','#00BCD4','#E91E63','#795548','#607D8B'];
+
+  function spaceColor(name) {
+    let hash = 0;
+    for (let i = 0; i < (name||'').length; i++) hash = name.charCodeAt(i) + ((hash<<5)-hash);
+    return SPACE_COLORS[Math.abs(hash) % SPACE_COLORS.length];
+  }
+
+  if (status === 'loading') return null;
+  if (!hasAppSession) return null;
+
+  // ── NOT SIGNED IN TO GOOGLE ────────────────────────────────
+  if (!isGoogleSignedIn) {
+    return (
+      <Layout>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'60vh', gap:28, textAlign:'center', padding:'0 20px' }}>
+          {/* Header */}
+          <div>
+            <div style={{ width:72, height:72, borderRadius:20, background:'linear-gradient(135deg,#00AC47,#1A73E8)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2.2rem', margin:'0 auto 16px' }}>💬</div>
+            <h2 style={{ fontWeight:900, fontSize:'1.4rem', marginBottom:8 }}>Google Chat</h2>
+            <p style={{ fontSize:'.9rem', color:'var(--muted2)', lineHeight:1.7, maxWidth:420, margin:'0 auto' }}>
+              Sign in with your Google account to access all your Spaces and Direct Messages — Fattoush, BeWAXed, Sewaro and more — right here inside Your Socials OS.
+            </p>
+          </div>
+
+          {/* Sign in button */}
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/chat' })}
+            style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 28px', background:'#fff', border:'2px solid #dadce0', borderRadius:14, cursor:'pointer', fontFamily:'Google Sans, Inter, sans-serif', fontSize:'1rem', fontWeight:600, color:'#3c4043', boxShadow:'0 2px 12px rgba(0,0,0,.12)', transition:'box-shadow .2s' }}
+            onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.18)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,.12)'}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Sign in with Google
+          </button>
+
+          {/* What you'll see */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:10, maxWidth:600, width:'100%' }}>
+            {['Fattoush SM Marketing','beWAXed','Sewaro Craft Salon','Tip & Toe – Chennai','Scale Up','Sagar Rehab'].map((name,i) => (
+              <div key={name} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 14px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:10 }}>
+                <div style={{ width:28, height:28, borderRadius:7, background:SPACE_COLORS[i%SPACE_COLORS.length], display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.72rem', flexShrink:0 }}>{name[0]}</div>
+                <span style={{ fontSize:'.78rem', color:'var(--muted2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
+              </div>
+            ))}
+          </div>
+
+          <p style={{ fontSize:'.75rem', color:'var(--muted)', lineHeight:1.6 }}>
+            Your messages stay in Google. We only read them to show here.
+          </p>
+        </div>
+      </Layout>
     );
-    // After they switch, update what we show
-    const t = setInterval(() => {
-      if (w?.closed) { clearInterval(t); setShowAccountInput(true); }
-    }, 800);
   }
 
-  function saveAccount() {
-    const val = accountInput.trim();
-    if (!val) return;
-    setGoogleAccount(val);
-    localStorage.setItem('ys_google_account', val);
-    setShowAccountInput(false);
-    setAccountInput('');
-  }
-
-  function focusChat() {
-    if (chatWindowRef.current && !chatWindowRef.current.closed) chatWindowRef.current.focus();
-  }
-  function closeChat() {
-    if (chatWindowRef.current && !chatWindowRef.current.closed) chatWindowRef.current.close();
-    setWindowOpen(false); setActiveSpace(null);
-  }
-
-  if (status !== 'authenticated') return null;
-
+  // ── SIGNED IN TO GOOGLE ────────────────────────────────────
   return (
-    <Layout>
-      <div className="fade-up">
+    <Layout noPadding>
+      <div style={{ display:'flex', height:'calc(100dvh - 60px)', overflow:'hidden', fontFamily:'Google Sans, Inter, Arial, sans-serif' }}>
 
-        {/* ── TOP BAR ── */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:'linear-gradient(135deg,#00AC47,#1A73E8)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.4rem' }}>💬</div>
-            <div>
-              <h2 style={{ fontWeight:900, fontSize:'1.1rem', margin:0 }}>Google Chat</h2>
-              <p style={{ fontSize:'.75rem', color:'var(--muted2)', margin:0 }}>All your spaces and messages — managed from here</p>
+        {/* ── SIDEBAR ───────────────────────────────────────── */}
+        <div style={{ width:280, minWidth:280, background:'#111827', borderRight:'1px solid rgba(255,255,255,.08)', display:'flex', flexDirection:'column', flexShrink:0 }}>
+
+          {/* Account badge */}
+          <div style={{ padding:'14px 14px 10px', borderBottom:'1px solid rgba(255,255,255,.08)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,#1A73E8,#00AC47)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, flexShrink:0 }}>
+                {(session?.user?.email || '?')[0].toUpperCase()}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:'.82rem', fontWeight:700, color:'#e8eaed', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{session?.user?.name || 'Google User'}</div>
+                <div style={{ fontSize:'.7rem', color:'#00AC47' }}>● {session?.user?.email}</div>
+              </div>
+              <button onClick={() => signIn('google', { callbackUrl:'/chat' })}
+                title="Switch account"
+                style={{ background:'rgba(255,255,255,.08)', border:'none', borderRadius:6, padding:'4px 8px', color:'#9aa0a6', cursor:'pointer', fontSize:'.7rem', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+                Switch
+              </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ position:'relative' }}>
+              <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#9aa0a6', fontSize:'.82rem' }}>🔍</span>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search spaces"
+                style={{ width:'100%', background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.1)', borderRadius:20, padding:'7px 12px 7px 30px', fontSize:'.82rem', color:'#e8eaed', fontFamily:'inherit', outline:'none', boxSizing:'border-box' }}/>
             </div>
           </div>
 
-          {/* Account + controls — top right */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            {/* Google account badge */}
-            {googleAccount && (
-              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:20 }}>
-                <div style={{ width:26, height:26, borderRadius:'50%', background:'linear-gradient(135deg,#1A73E8,#00AC47)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'.7rem', fontWeight:800 }}>
-                  {googleAccount[0].toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--text)', lineHeight:1 }}>{googleAccount}</div>
-                  <div style={{ fontSize:'.62rem', color:'#00AC47', lineHeight:1.4 }}>● Google Account</div>
-                </div>
-                <button onClick={switchAccount}
-                  style={{ background:'none', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:'.7rem', padding:'2px 6px', borderRadius:6, fontFamily:'Inter,sans-serif' }}
-                  title="Switch account">⇄</button>
+          {/* Nav tabs */}
+          <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,.08)', flexShrink:0 }}>
+            {[['spaces','Spaces'],['dm','DMs']].map(([v,l]) => (
+              <button key={v} onClick={() => setView(v)}
+                style={{ flex:1, padding:'10px', background:'transparent', border:'none', color: view===v ? '#8ab4f8' : '#9aa0a6', fontSize:'.78rem', fontWeight: view===v ? 700 : 500, cursor:'pointer', fontFamily:'inherit', borderBottom: view===v ? '2px solid #1A73E8' : '2px solid transparent' }}>
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Space / DM list */}
+          <div style={{ flex:1, overflowY:'auto' }}>
+            {loading && (
+              <div style={{ padding:'24px', textAlign:'center', color:'#9aa0a6' }}>
+                <Spinner size={20}/><div style={{ marginTop:8, fontSize:'.8rem' }}>Loading…</div>
               </div>
             )}
-            {!googleAccount && (
-              <button onClick={() => setShowAccountInput(true)}
-                style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 14px', background:'#fff', border:'1.5px solid #dadce0', borderRadius:20, cursor:'pointer', fontFamily:'Inter,sans-serif', fontSize:'.8rem', fontWeight:600, color:'#3c4043' }}>
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={16} height={16} alt="" onError={e=>e.target.style.display='none'}/>
-                Set Google Account
-              </button>
-            )}
 
-            {/* Window controls */}
-            {windowOpen ? (
+            {!loading && view === 'spaces' && (
               <>
-                <button onClick={focusChat}
-                  style={{ padding:'7px 14px', background:'rgba(0,172,71,.15)', border:'1px solid rgba(0,172,71,.3)', borderRadius:9, color:'#00AC47', cursor:'pointer', fontSize:'.8rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>
-                  ● Focus Window
-                </button>
-                <button onClick={closeChat}
-                  style={{ padding:'7px 12px', background:'rgba(234,67,53,.1)', border:'1px solid rgba(234,67,53,.25)', borderRadius:9, color:'#EA4335', cursor:'pointer', fontSize:'.8rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>✕</button>
+                {filteredSpaces.length === 0 && (
+                  <div style={{ padding:'20px 16px', fontSize:'.8rem', color:'#9aa0a6', textAlign:'center', lineHeight:1.6 }}>
+                    No spaces found.<br/>
+                    <a href="https://chat.google.com" target="_blank" rel="noopener noreferrer" style={{ color:'#8ab4f8' }}>Open Google Chat ↗</a><br/>to create spaces.
+                  </div>
+                )}
+                {filteredSpaces.map(space => {
+                  const name  = space.displayName || space.name;
+                  const color = spaceColor(name);
+                  const isActive = activeSpace?.name === space.name;
+                  return (
+                    <button key={space.name} onClick={() => openSpace(space)}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'9px 14px', background: isActive ? 'rgba(26,115,232,.2)' : 'transparent', border:'none', cursor:'pointer', color:'#e8eaed', fontFamily:'inherit', fontSize:'.85rem', textAlign:'left', transition:'background .12s' }}
+                      onMouseEnter={e => { if(!isActive) e.currentTarget.style.background='rgba(255,255,255,.06)'; }}
+                      onMouseLeave={e => { if(!isActive) e.currentTarget.style.background='transparent'; }}>
+                      <div style={{ width:32, height:32, borderRadius:8, background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.78rem', flexShrink:0 }}>
+                        {name.slice(0,2).toUpperCase()}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight: isActive?700:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'.84rem' }}>{name}</div>
+                        {space.memberCount && <div style={{ fontSize:'.68rem', color:'#9aa0a6' }}>{space.memberCount} members</div>}
+                      </div>
+                      {isActive && <div style={{ width:6, height:6, borderRadius:'50%', background:'#1A73E8', flexShrink:0 }}/>}
+                    </button>
+                  );
+                })}
               </>
-            ) : (
-              <button onClick={() => openChat()}
-                style={{ padding:'8px 20px', background:'linear-gradient(135deg,#00AC47,#1A73E8)', border:'none', borderRadius:10, color:'#fff', cursor:'pointer', fontSize:'.85rem', fontWeight:700, fontFamily:'Inter,sans-serif' }}>
-                💬 Open Google Chat
-              </button>
+            )}
+
+            {!loading && view === 'dm' && (
+              <div style={{ padding:'8px 0' }}>
+                <div style={{ padding:'6px 16px', fontSize:'.68rem', fontWeight:700, color:'#9aa0a6', textTransform:'uppercase', letterSpacing:'.1em' }}>Direct Messages</div>
+                {spaces.filter(s => s.spaceType === 'DIRECT_MESSAGE' || s.type === 'DIRECT_MESSAGE').map(dm => {
+                  const name = dm.displayName || 'Direct Message';
+                  const color = spaceColor(name);
+                  const isActive = activeSpace?.name === dm.name;
+                  return (
+                    <button key={dm.name} onClick={() => openSpace(dm)}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'9px 14px', background: isActive ? 'rgba(26,115,232,.2)' : 'transparent', border:'none', cursor:'pointer', color:'#e8eaed', fontFamily:'inherit', fontSize:'.85rem', textAlign:'left' }}
+                      onMouseEnter={e => { if(!isActive) e.currentTarget.style.background='rgba(255,255,255,.06)'; }}
+                      onMouseLeave={e => { if(!isActive) e.currentTarget.style.background='transparent'; }}>
+                      <div style={{ width:32, height:32, borderRadius:'50%', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.78rem', flexShrink:0 }}>
+                        {name[0]?.toUpperCase()}
+                      </div>
+                      <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
+                    </button>
+                  );
+                })}
+                {spaces.filter(s => s.spaceType === 'DIRECT_MESSAGE' || s.type === 'DIRECT_MESSAGE').length === 0 && (
+                  <div style={{ padding:'16px', fontSize:'.8rem', color:'#9aa0a6', textAlign:'center' }}>No DMs found</div>
+                )}
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Account input modal */}
-        {showAccountInput && (
-          <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12, padding:'16px 20px', marginBottom:16, display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
-            <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:'.8rem', fontWeight:600, marginBottom:6 }}>Your Google email</div>
-              <input value={accountInput} onChange={e=>setAccountInput(e.target.value)}
-                placeholder="manoj@yoursocials.in"
-                onKeyDown={e=>e.key==='Enter'&&saveAccount()}
-                style={{ width:'100%', background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, padding:'9px 12px', fontSize:'.85rem', color:'var(--text)', fontFamily:'Inter,sans-serif', outline:'none', boxSizing:'border-box' }}/>
-            </div>
-            <div style={{ display:'flex', gap:8, paddingTop:20 }}>
-              <button onClick={saveAccount}
-                style={{ padding:'9px 18px', background:'#1A73E8', border:'none', borderRadius:8, color:'#fff', cursor:'pointer', fontSize:'.82rem', fontWeight:700, fontFamily:'Inter,sans-serif' }}>Save</button>
-              <button onClick={()=>{setShowAccountInput(false);setAccountInput('');}}
-                style={{ padding:'9px 14px', background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, color:'var(--muted2)', cursor:'pointer', fontSize:'.82rem', fontFamily:'Inter,sans-serif' }}>Cancel</button>
-            </div>
-          </div>
-        )}
-
-        {/* Status bar */}
-        {windowOpen && (
-          <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 16px', background:'rgba(0,172,71,.07)', border:'1px solid rgba(0,172,71,.2)', borderRadius:10, marginBottom:16 }}>
-            <span style={{ color:'#00AC47', fontSize:'.85rem' }}>✅</span>
-            <span style={{ fontSize:'.82rem', color:'var(--muted2)' }}>
-              Google Chat is open{activeSpace ? ` → ${activeSpace}` : ''}. Click any space to jump there.
-            </span>
-            <a href="https://chat.google.com" target="_blank" rel="noopener noreferrer"
-              style={{ marginLeft:'auto', fontSize:'.75rem', color:'var(--purple2)', fontWeight:600, textDecoration:'none' }}>
-              ↗ Full screen
-            </a>
-          </div>
-        )}
-
-        {/* ── VIEW TABS ── */}
-        <div style={{ display:'flex', gap:4, marginBottom:18, background:'var(--surface2)', padding:4, borderRadius:10, border:'1px solid var(--border)', width:'fit-content' }}>
-          {[['spaces','🏢 Spaces'],['dm','💬 Direct Messages'],['tools','⚙️ Tools']].map(([v,l]) => (
-            <button key={v} onClick={()=>setView(v)}
-              style={{ padding:'6px 16px', borderRadius:7, border:'none', background:view===v?'var(--surface)':' transparent', color:view===v?'var(--text)':' var(--muted2)', fontSize:'.8rem', fontWeight:view===v?700:500, cursor:'pointer', fontFamily:'Inter,sans-serif', boxShadow:view===v?'var(--shadow)':' none' }}>
-              {l}
+          {/* Sign out Google */}
+          <div style={{ padding:'10px 14px', borderTop:'1px solid rgba(255,255,255,.08)', flexShrink:0 }}>
+            <button onClick={() => signOut({ callbackUrl:'/chat' })}
+              style={{ width:'100%', padding:'8px', background:'rgba(234,67,53,.1)', border:'1px solid rgba(234,67,53,.2)', borderRadius:8, color:'#EA4335', cursor:'pointer', fontSize:'.78rem', fontWeight:600, fontFamily:'inherit' }}>
+              Sign out of Google
             </button>
-          ))}
+          </div>
         </div>
 
-        {/* ── SPACES VIEW ── */}
-        {view === 'spaces' && (
-          <div>
-            <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:12 }}>Your Spaces — click to open</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:10 }}>
-              {SPACES.map(space => (
-                <button key={space.name} onClick={() => openChat(space.name)}
-                  style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12, cursor:'pointer', fontFamily:'Inter,sans-serif', textAlign:'left', transition:'all .15s', position:'relative' }}
-                  onMouseEnter={e=>{e.currentTarget.style.borderColor=space.color;e.currentTarget.style.background=space.color+'11';}}
-                  onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--surface2)';}}>
-                  {activeSpace===space.name&&windowOpen&&(
-                    <div style={{ position:'absolute', top:8, right:8, width:8, height:8, borderRadius:'50%', background:'#00AC47' }}/>
-                  )}
-                  <div style={{ width:40, height:40, borderRadius:10, background:space.color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.92rem', flexShrink:0 }}>
-                    {space.initial}
-                  </div>
-                  <div style={{ minWidth:0, flex:1 }}>
-                    <div style={{ fontWeight:700, fontSize:'.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{space.name}</div>
-                    <div style={{ fontSize:'.7rem', color:'var(--muted2)', marginTop:2 }}>Click to open ↗</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* ── MAIN AREA ─────────────────────────────────────── */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#0f1117', minWidth:0 }}>
 
-        {/* ── DM VIEW ── */}
-        {view === 'dm' && (
-          <div>
-            <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:12 }}>Direct Messages</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:8 }}>
-              {['Karishma','Siva Dharshini','BOJARAJAN T','Yuvani','lopes_yoursocials'].map((name,i) => {
-                const colors = ['#E91E63','#00AC47','#FF6D00','#9C27B0','#1A73E8'];
-                return (
-                  <button key={name} onClick={() => openChat(name)}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12, cursor:'pointer', fontFamily:'Inter,sans-serif', textAlign:'left', transition:'all .15s' }}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor=colors[i%colors.length];e.currentTarget.style.background=colors[i%colors.length]+'11';}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--surface2)';}}>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:colors[i%colors.length], display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.85rem', flexShrink:0, position:'relative' }}>
-                      {name[0]}
-                      <div style={{ position:'absolute', bottom:0, right:0, width:9, height:9, borderRadius:'50%', background:'#00AC47', border:'2px solid var(--surface2)' }}/>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:600, fontSize:'.85rem' }}>{name}</div>
-                      <div style={{ fontSize:'.7rem', color:'var(--muted2)' }}>Send message ↗</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── TOOLS VIEW ── */}
-        {view === 'tools' && (
-          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:14, padding:'18px 22px' }}>
-              <div style={{ fontWeight:700, fontSize:'.9rem', marginBottom:6 }}>🔄 Switch Google Account</div>
-              <div style={{ fontSize:'.8rem', color:'var(--muted2)', lineHeight:1.6, marginBottom:14 }}>
-                Currently: <strong style={{ color:'var(--text)' }}>{googleAccount || 'No account set'}</strong><br/>
-                Click below to switch to a different Google account for Chat.
-              </div>
-              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-                <button onClick={switchAccount}
-                  style={{ display:'inline-flex', alignItems:'center', gap:9, padding:'9px 20px', background:'#fff', border:'1.5px solid #dadce0', borderRadius:9, cursor:'pointer', fontFamily:'Google Sans,Inter,sans-serif', fontSize:'.85rem', fontWeight:600, color:'#3c4043' }}>
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width={18} height={18} alt="" onError={e=>e.target.style.display='none'}/>
-                  Switch Google Account
-                </button>
-                <button onClick={() => setShowAccountInput(true)}
-                  style={{ padding:'9px 16px', background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:9, cursor:'pointer', fontSize:'.82rem', color:'var(--muted2)', fontFamily:'Inter,sans-serif' }}>
-                  ✏️ Edit saved account
-                </button>
+          {/* No space selected */}
+          {!activeSpace && (
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16, color:'#9aa0a6', padding:40, textAlign:'center' }}>
+              <div style={{ fontSize:'3rem' }}>💬</div>
+              <div style={{ fontWeight:700, fontSize:'1rem', color:'#e8eaed' }}>Select a space to start</div>
+              <div style={{ fontSize:'.84rem', lineHeight:1.7, maxWidth:360 }}>
+                Choose a space from the sidebar. Your messages are loaded directly from Google Chat.
               </div>
             </div>
+          )}
 
-            <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:14, padding:'18px 22px' }}>
-              <div style={{ fontWeight:700, fontSize:'.9rem', marginBottom:6 }}>🖥️ Window Management</div>
-              <div style={{ fontSize:'.8rem', color:'var(--muted2)', lineHeight:1.6, marginBottom:14 }}>
-                Google Chat opens in a separate window. Use snap layout to view both side by side.
+          {/* Active space */}
+          {activeSpace && (
+            <>
+              {/* Header */}
+              <div style={{ padding:'12px 20px', borderBottom:'1px solid rgba(255,255,255,.08)', display:'flex', alignItems:'center', gap:12, flexShrink:0, background:'#111827' }}>
+                <div style={{ width:36, height:36, borderRadius:9, background:spaceColor(activeSpace.displayName||activeSpace.name), display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.9rem', flexShrink:0 }}>
+                  {(activeSpace.displayName||activeSpace.name).slice(0,2).toUpperCase()}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:'.95rem', color:'#e8eaed' }}>{activeSpace.displayName || activeSpace.name}</div>
+                  <div style={{ fontSize:'.7rem', color:'#9aa0a6' }}>{messages.length} messages loaded</div>
+                </div>
+                <a href={'https://chat.google.com/room/' + activeSpace.name?.split('/')[1]} target="_blank" rel="noopener noreferrer"
+                  style={{ padding:'5px 12px', background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.12)', borderRadius:8, color:'#9aa0a6', textDecoration:'none', fontSize:'.75rem', fontWeight:600, fontFamily:'inherit' }}>
+                  ↗ Open in Google Chat
+                </a>
               </div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                <button onClick={() => openChat()}
-                  style={{ padding:'9px 18px', background:'linear-gradient(135deg,#00AC47,#1A73E8)', border:'none', borderRadius:9, color:'#fff', cursor:'pointer', fontSize:'.82rem', fontWeight:700, fontFamily:'Inter,sans-serif' }}>
-                  💬 Open Chat Window
-                </button>
-                {windowOpen && (
-                  <button onClick={focusChat}
-                    style={{ padding:'9px 16px', background:'rgba(0,172,71,.15)', border:'1px solid rgba(0,172,71,.3)', borderRadius:9, color:'#00AC47', cursor:'pointer', fontSize:'.82rem', fontWeight:600, fontFamily:'Inter,sans-serif' }}>
-                    ● Bring to Front
-                  </button>
+
+              {/* Messages */}
+              <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+                {loadMsgs && (
+                  <div style={{ textAlign:'center', color:'#9aa0a6', padding:24 }}><Spinner size={20}/></div>
                 )}
-                {windowOpen && (
-                  <button onClick={closeChat}
-                    style={{ padding:'9px 16px', background:'rgba(234,67,53,.1)', border:'1px solid rgba(234,67,53,.25)', borderRadius:9, color:'#EA4335', cursor:'pointer', fontSize:'.82rem', fontFamily:'Inter,sans-serif' }}>
-                    ✕ Close Window
-                  </button>
+                {!loadMsgs && messages.length === 0 && (
+                  <div style={{ textAlign:'center', color:'#9aa0a6', padding:'40px 0', fontSize:'.88rem' }}>No messages yet</div>
                 )}
+                {messages.map((msg, i) => {
+                  const isMe    = msg.sender?.name?.includes(session?.user?.email?.replace('@','_').replace('.','_'));
+                  const name    = msg.sender?.displayName || 'Unknown';
+                  const content = msg.text || msg.formattedText || '';
+                  const prevMsg = messages[i-1];
+                  const showSender = !prevMsg || prevMsg.sender?.name !== msg.sender?.name;
+                  return (
+                    <div key={msg.name || i} style={{ marginBottom: showSender ? 14 : 4 }}>
+                      {showSender && (
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                          <div style={{ width:28, height:28, borderRadius:'50%', background:spaceColor(name), display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:'.72rem', flexShrink:0 }}>
+                            {name[0]?.toUpperCase()}
+                          </div>
+                          <span style={{ fontSize:'.78rem', fontWeight:700, color:'#e8eaed' }}>{name}</span>
+                          <span style={{ fontSize:'.66rem', color:'#9aa0a6' }}>{msg.createTime ? fullTime(msg.createTime) : ''}</span>
+                        </div>
+                      )}
+                      <div style={{ paddingLeft: showSender ? 0 : 36, display:'flex', flexDirection:'column', gap:4 }}>
+                        {content && (
+                          <div style={{ background:'rgba(255,255,255,.06)', borderRadius:12, padding:'9px 14px', display:'inline-block', maxWidth:'75%', fontSize:'.86rem', lineHeight:1.5, color:'#e8eaed', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                            {content}
+                          </div>
+                        )}
+                        {/* Attachments */}
+                        {msg.attachment?.map((att, ai) => (
+                          <div key={ai} style={{ background:'rgba(255,255,255,.06)', borderRadius:10, padding:'8px 12px', display:'inline-flex', alignItems:'center', gap:8, fontSize:'.8rem', color:'#8ab4f8' }}>
+                            📎 {att.displayName || 'Attachment'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={bottomRef}/>
               </div>
-            </div>
 
-            <div style={{ background:'rgba(26,115,232,.06)', border:'1px solid rgba(26,115,232,.2)', borderRadius:12, padding:'14px 18px' }}>
-              <div style={{ fontWeight:700, fontSize:'.82rem', color:'#8ab4f8', marginBottom:8 }}>💡 Snap side by side</div>
-              <div style={{ fontSize:'.78rem', color:'var(--muted2)', lineHeight:1.7 }}>
-                <strong>Windows:</strong> Press Win+← on this window, then click the Chat window to snap it right.<br/>
-                <strong>Mac:</strong> Green dot → Tile Window to Left of Screen → pick Chat for the right.
+              {/* Input */}
+              <div style={{ padding:'12px 20px', borderTop:'1px solid rgba(255,255,255,.08)', display:'flex', gap:10, alignItems:'flex-end', flexShrink:0, background:'#111827' }}>
+                <textarea
+                  ref={inputRef}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onKeyDown={onKey}
+                  placeholder={`Message ${activeSpace.displayName || 'this space'}…`}
+                  rows={1}
+                  style={{ flex:1, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.12)', borderRadius:24, padding:'10px 16px', fontSize:'.87rem', color:'#e8eaed', fontFamily:'inherit', resize:'none', outline:'none', lineHeight:1.5, maxHeight:120, overflowY:'auto' }}
+                  onFocus={e => e.target.style.borderColor='#1A73E8'}
+                  onBlur={e => e.target.style.borderColor='rgba(255,255,255,.12)'}
+                  onInput={e => { e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,120)+'px'; }}
+                />
+                <button onClick={send} disabled={sending || !text.trim()}
+                  style={{ background: text.trim() ? '#1A73E8' : 'rgba(26,115,232,.3)', border:'none', borderRadius:10, padding:'9px 16px', color:'#fff', cursor: text.trim() ? 'pointer' : 'default', fontSize:'1rem', flexShrink:0, lineHeight:1, transition:'background .15s' }}>
+                  {sending ? '⏳' : '➤'}
+                </button>
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </Layout>
   );
