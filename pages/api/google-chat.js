@@ -1,4 +1,3 @@
-// Proxy Google Chat API calls server-side using stored access token
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../lib/auth';
 
@@ -7,7 +6,7 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
 
   const token = session.googleAccessToken;
-  if (!token) return res.status(403).json({ error: 'No Google access token. Please sign in with Google first.' });
+  if (!token) return res.status(403).json({ error: 'NO_TOKEN' });
 
   const { endpoint } = req.query;
   if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
@@ -25,8 +24,8 @@ export default async function handler(req, res) {
       body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
     });
     const data = await r.json();
-    if (!r.ok) return res.status(r.status).json(data);
-    return res.json(data);
+    // Always return what Google says — let client handle errors
+    return res.status(r.status).json(data);
   } catch(e) {
     return res.status(500).json({ error: e.message });
   }

@@ -41,6 +41,7 @@ export default function Chat() {
   const [text,        setText]        = useState('');
   const [sending,     setSending]     = useState(false);
   const [loading,     setLoading]     = useState(false);
+  const [spaceError,  setSpaceError]  = useState('');
   const [loadMsgs,    setLoadMsgs]    = useState(false);
   const [view,        setView]        = useState('spaces');
   const [search,      setSearch]      = useState('');
@@ -61,8 +62,15 @@ export default function Chat() {
     if (!isGoogleSignedIn) return;
     setLoading(true);
     try {
-      const d = await gchat('spaces?filter=spaceType%3DSPACE&pageSize=50');
-      if (d.spaces) setSpaces(d.spaces);
+      // Load all spaces — no filter so we get everything
+      const d = await gchat('spaces?pageSize=100');
+      console.log('[Chat] spaces response:', JSON.stringify(d));
+      if (d.spaces) {
+        setSpaces(d.spaces);
+      } else if (d.error) {
+        console.error('[Chat] spaces error:', d.error);
+        setSpaceError(d.error?.message || d.error?.status || JSON.stringify(d.error));
+      }
     } catch(e) {}
     setLoading(false);
   }, [isGoogleSignedIn]);
@@ -126,8 +134,16 @@ export default function Chat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  const filteredSpaces = spaces.filter(s =>
-    !search || (s.displayName || s.name).toLowerCase().includes(search.toLowerCase())
+  const allSpaces = spaces.filter(s =>
+    s.spaceType !== 'DIRECT_MESSAGE' && s.type !== 'DIRECT_MESSAGE'
+  );
+  const allDMs = spaces.filter(s =>
+    s.spaceType === 'DIRECT_MESSAGE' || s.type === 'DIRECT_MESSAGE' ||
+    s.spaceType === 'DIRECT_MESSAGE' || (s.singleUserBotDm === true)
+  );
+  const filteredSpaces = (search
+    ? allSpaces.filter(s => (s.displayName || s.name).toLowerCase().includes(search.toLowerCase()))
+    : allSpaces
   );
 
   const SPACE_COLORS = ['#00AC47','#1A73E8','#EA4335','#FBBC04','#9C27B0','#FF6D00','#00BCD4','#E91E63','#795548','#607D8B'];
@@ -242,10 +258,23 @@ export default function Chat() {
 
             {!loading && view === 'spaces' && (
               <>
-                {filteredSpaces.length === 0 && (
+                {filteredSpaces.length === 0 && !spaceError && (
                   <div style={{ padding:'20px 16px', fontSize:'.8rem', color:'#9aa0a6', textAlign:'center', lineHeight:1.6 }}>
                     No spaces found.<br/>
                     <a href="https://chat.google.com" target="_blank" rel="noopener noreferrer" style={{ color:'#8ab4f8' }}>Open Google Chat ↗</a><br/>to create spaces.
+                  </div>
+                )}
+                {spaceError && (
+                  <div style={{ padding:'16px', fontSize:'.75rem', color:'#EA4335', lineHeight:1.7, background:'rgba(234,67,53,.06)', margin:'8px', borderRadius:8, border:'1px solid rgba(234,67,53,.2)' }}>
+                    <div style={{ fontWeight:700, marginBottom:4 }}>⚠️ Could not load spaces</div>
+                    <div style={{ color:'#9aa0a6', marginBottom:8 }}>{spaceError}</div>
+                    <div style={{ color:'#9aa0a6', fontSize:'.7rem', lineHeight:1.6 }}>
+                      Fix: In Google Cloud Console → APIs &amp; Services → Enable <strong style={{ color:'#e8eaed' }}>Google Chat API</strong>. Then sign out and sign in again.
+                    </div>
+                    <button onClick={() => { setSpaceError(''); loadSpaces(); }}
+                      style={{ marginTop:8, padding:'5px 12px', background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', borderRadius:6, color:'#e8eaed', cursor:'pointer', fontSize:'.72rem', fontFamily:'inherit' }}>
+                      Retry
+                    </button>
                   </div>
                 )}
                 {filteredSpaces.map(space => {
