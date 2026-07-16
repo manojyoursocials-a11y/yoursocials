@@ -43,6 +43,7 @@ export default function Chat() {
   const [loading,     setLoading]     = useState(false);
   const [spaceError,  setSpaceError]  = useState('');
   const [loadMsgs,    setLoadMsgs]    = useState(false);
+  const [membersMap,  setMembersMap]  = useState({}); // userId -> displayName
   const [view,        setView]        = useState('spaces');
   const [search,      setSearch]      = useState('');
   const [mediaFile,   setMediaFile]   = useState(null);
@@ -77,6 +78,22 @@ export default function Chat() {
 
   useEffect(() => { if (isGoogleSignedIn) loadSpaces(); }, [isGoogleSignedIn, loadSpaces]);
 
+  // Fetch members of a space and build a name map
+  async function fetchMembers(spaceName) {
+    try {
+      const d = await gchat(spaceName + '/members?pageSize=100');
+      if (d.memberships) {
+        const map = {};
+        d.memberships.forEach(m => {
+          if (m.member?.name) {
+            map[m.member.name] = m.member.displayName || m.member.name;
+          }
+        });
+        setMembersMap(prev => ({ ...prev, ...map }));
+      }
+    } catch(e) {}
+  }
+
   // Open a space and load messages
   async function openSpace(space) {
     setActiveSpace(space);
@@ -84,28 +101,35 @@ export default function Chat() {
     setLoadMsgs(true);
     if (pollRef.current) clearInterval(pollRef.current);
 
+    // Fetch members in parallel with messages for name resolution
+    fetchMembers(space.name);
+
     try {
-      const name = space.name; // e.g. "spaces/XXXX"
-      const d = await gchat(name + '/messages?pageSize=50&orderBy=createTime');
-      setMessages(Array.isArray(d.messages) ? d.messages.reverse() : []);
+      const name = space.name;
+      const d = await gchat(name + '/messages?pageSize=100&orderBy=createTime%20desc');
+      const msgs = Array.isArray(d.messages) ? d.messages.reverse() : [];
+      setMessages(msgs);
     } catch(e) {}
     setLoadMsgs(false);
 
     sinceRef.current = new Date().toISOString();
+    // Poll every 4 seconds for new messages
     pollRef.current = setInterval(async () => {
       if (!sinceRef.current || !space?.name) return;
       try {
-        const filter = encodeURIComponent('createTime > "' + sinceRef.current + '"');
-        const d = await gchat(space.name + '/messages?filter=' + filter + '&orderBy=createTime');
-        sinceRef.current = new Date().toISOString();
+        // Use orderBy createTime desc and take newest, compare with what we have
+        const d = await gchat(space.name + '/messages?pageSize=20&orderBy=createTime%20desc');
         if (d.messages?.length) {
           setMessages(prev => {
             const ids = new Set(prev.map(m => m.name));
-            return [...prev, ...d.messages.filter(m => !ids.has(m.name))];
+            const fresh = d.messages.filter(m => !ids.has(m.name));
+            if (!fresh.length) return prev;
+            return [...prev, ...fresh.reverse()];
           });
         }
+        sinceRef.current = new Date().toISOString();
       } catch(e) {}
-    }, 5000);
+    }, 4000);
   }
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -376,8 +400,15 @@ export default function Chat() {
                   <div style={{ textAlign:'center', color:'#9aa0a6', padding:'40px 0', fontSize:'.88rem' }}>No messages yet</div>
                 )}
                 {messages.map((msg, i) => {
-                  const isMe    = msg.sender?.name?.includes(session?.user?.email?.replace('@','_').replace('.','_'));
-                  const name    = msg.sender?.displayName || 'Unknown';
+                  const senderResourceName = msg.sender?.name || '';
+                  const isMe = senderResourceName === 'users/me' ||
+                    msg.sender?.type === 'HUMAN' && (
+                      msg.sender?.displayName === session?.user?.name ||
+                      membersMap[senderResourceName] === session?.user?.name
+                    );
+                  const name = msg.sender?.displayName ||
+                    membersMap[senderResourceName] ||
+                    (senderResourceName.includes('bot') ? '🤖 Bot' : senderResourceName.split('/').pop() || 'Unknown');
                   const content = msg.text || msg.formattedText || '';
                   const prevMsg = messages[i-1];
                   const showSender = !prevMsg || prevMsg.sender?.name !== msg.sender?.name;
