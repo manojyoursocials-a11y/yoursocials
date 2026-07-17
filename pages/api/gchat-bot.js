@@ -1,145 +1,151 @@
-// Google Chat Bot webhook
-// This endpoint receives messages from Google Chat and responds with
-// task info, follow-ups, and team updates directly inside Google Chat
+// Your Socials OS — Google Chat Bot Webhook
+// Google calls this URL when someone messages the bot
 
 import { getDb } from '../../lib/db';
 
-// Verify the request is from Google Chat
-function verifyGoogle(req) {
-  // In production Google sends a Bearer token — for now accept all POST
-  return req.method === 'POST';
-}
-
-// Build a Google Chat card for a task
-function taskCard(task) {
-  const status = { todo:'📋 To Do', inprogress:'⚡ In Progress', review:'👁 Under Review', done:'✅ Done' }[task.status] || task.status;
-  const priority = { P1:'🔴 P1', P2:'🟠 P2', P3:'🟡 P3', P4:'🟢 P4' }[task.priority] || task.priority;
+// Google Chat Cards v2 format — required for newer Chat API
+function makeCard(header, rows) {
   return {
-    header: { title: task.title, subtitle: status + ' · ' + priority },
-    sections: [{
-      widgets: [
-        task.client_name ? { textParagraph: { text: '🏢 ' + task.client_name } } : null,
-        task.deadline    ? { textParagraph: { text: '⏰ Due: ' + String(task.deadline).slice(0,10) } } : null,
-        task.owner_name  ? { textParagraph: { text: '👤 ' + task.owner_name } } : null,
-        {
-          buttons: [{
-            textButton: {
-              text: 'Open Your Socials OS',
-              onClick: { openLink: { url: 'https://yoursocials.vercel.app/tasks' } }
+    cardsV2: [{
+      cardId: 'ys-card-' + Date.now(),
+      card: {
+        header: {
+          title:    header.title,
+          subtitle: header.subtitle || '',
+          imageUrl: 'https://yoursocials.vercel.app/favicon-180.png',
+          imageType: 'CIRCLE',
+        },
+        sections: [{
+          widgets: [
+            ...rows.map(row => ({ textParagraph: { text: row } })),
+            {
+              buttonList: {
+                buttons: [
+                  { text:'📋 Tasks',      onClick:{ openLink:{ url:'https://yoursocials.vercel.app/tasks' } } },
+                  { text:'📩 Follow-ups', onClick:{ openLink:{ url:'https://yoursocials.vercel.app/followups' } } },
+                  { text:'🏆 Leaderboard',onClick:{ openLink:{ url:'https://yoursocials.vercel.app/leaderboard' } } },
+                ]
+              }
             }
-          }]
-        }
-      ].filter(Boolean)
-    }]
-  };
-}
-
-// Build summary card
-function summaryCard(tasks, followups) {
-  const todo       = tasks.filter(t => t.status === 'todo').length;
-  const inprogress = tasks.filter(t => t.status === 'inprogress').length;
-  const review     = tasks.filter(t => t.status === 'review').length;
-  const done       = tasks.filter(t => t.status === 'done' && t.completed_at && new Date(t.completed_at) > new Date(Date.now() - 86400000)).length;
-  const overdue    = tasks.filter(t => t.deadline && t.status !== 'done' && new Date(t.deadline) < new Date()).length;
-  const pendingFu  = followups.filter(f => f.status !== 'sent').length;
-
-  return {
-    header: { title: '📊 Your Socials OS — Daily Update', subtitle: new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' }) },
-    sections: [{
-      widgets: [
-        { textParagraph: { text: `📋 *To Do:* ${todo}   ⚡ *In Progress:* ${inprogress}   👁 *Review:* ${review}` } },
-        { textParagraph: { text: `✅ *Done today:* ${done}   ❗ *Overdue:* ${overdue}   📩 *Follow-ups pending:* ${pendingFu}` } },
-        {
-          buttons: [
-            { textButton: { text: '📋 Tasks', onClick: { openLink: { url: 'https://yoursocials.vercel.app/tasks' } } } },
-            { textButton: { text: '📩 Follow-ups', onClick: { openLink: { url: 'https://yoursocials.vercel.app/followups' } } } },
-            { textButton: { text: '🏆 Leaderboard', onClick: { openLink: { url: 'https://yoursocials.vercel.app/leaderboard' } } } },
           ]
-        }
-      ]
+        }]
+      }
     }]
   };
 }
 
 export default async function handler(req, res) {
-  if (!verifyGoogle(req)) return res.status(403).json({ error: 'Forbidden' });
+  // Google Chat only sends POST
+  if (req.method !== 'POST') return res.status(200).json({ text: 'OK' });
 
-  const db   = getDb();
-  const body = req.body;
-  const type = body?.type;
-  const text = (body?.message?.text || body?.message?.argumentText || '').toLowerCase().trim();
+  const body = req.body || {};
+  const type = body.type || '';
+  const msgText = (body.message?.text || body.message?.argumentText || '').toLowerCase().trim();
+  const slashCmd = body.message?.slashCommand?.commandId;
 
-  // Bot added to a space
-  if (type === 'ADDED_TO_SPACE') {
-    return res.json({
-      text: `👋 *Your Socials OS* is now connected to this space!\n\nType any of these commands:\n• \`/tasks\` — see active tasks\n• \`/today\` — today's summary\n• \`/overdue\` — overdue tasks\n• \`/followups\` — pending follow-ups\n• \`/leaderboard\` — team coin rankings\n• \`/help\` — show this menu\n\nAll task updates will also be posted here automatically. 🚀`
-    });
-  }
+  console.log('[GChat Bot] type:', type, 'text:', msgText);
 
-  // Slash commands or text
-  if (type === 'MESSAGE') {
-    try {
-      const tasks     = await db.getTasks();
-      const followups = await db.getFollowups?.() || [];
-      const members   = await db.getUsers();
+  try {
+    const db = getDb();
 
-      // /today or /summary
-      if (text.includes('/today') || text.includes('/summary') || text === 'today' || text === 'summary') {
-        const card = summaryCard(tasks, followups);
-        return res.json({ cards: [card] });
+    // ── Bot added to a space ─────────────────────────────
+    if (type === 'ADDED_TO_SPACE') {
+      return res.status(200).json({
+        text: `👋 *Your Socials OS* is now connected!\n\nUse these commands:\n• \`/today\` — Daily summary\n• \`/tasks\` — Active tasks\n• \`/overdue\` — Overdue tasks\n• \`/followups\` — Pending follow-ups\n• \`/leaderboard\` — Team coin rankings\n\nYou'll also get notified here when tasks are created, moved or completed. 🚀\n\n🔗 https://yoursocials.vercel.app`
+      });
+    }
+
+    // ── Bot removed ──────────────────────────────────────
+    if (type === 'REMOVED_FROM_SPACE') {
+      return res.status(200).end();
+    }
+
+    // ── Incoming message ─────────────────────────────────
+    if (type === 'MESSAGE') {
+      const tasks     = await db.getTasks().catch(() => []);
+      const followups = await db.getFollowups().catch(() => []);
+      const members   = await db.getUsers().catch(() => []);
+
+      const active  = tasks.filter(t => t.status !== 'done');
+      const overdue = tasks.filter(t => t.deadline && t.status !== 'done' && new Date(t.deadline) < new Date());
+      const pending = followups.filter(f => f.status !== 'sent');
+
+      // /today — daily summary
+      if (msgText.includes('/today') || msgText.includes('today') || msgText.includes('/summary') || slashCmd === '1') {
+        const todo       = tasks.filter(t => t.status === 'todo').length;
+        const inprogress = tasks.filter(t => t.status === 'inprogress').length;
+        const review     = tasks.filter(t => t.status === 'review').length;
+        const doneToday  = tasks.filter(t => t.status === 'done' && t.completed_at && new Date(t.completed_at) > new Date(Date.now()-86400000)).length;
+
+        const card = makeCard(
+          { title: '📊 Daily Summary', subtitle: new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) },
+          [
+            `📋 <b>To Do:</b> ${todo}`,
+            `⚡ <b>In Progress:</b> ${inprogress}`,
+            `👁 <b>Under Review:</b> ${review}`,
+            `✅ <b>Done today:</b> ${doneToday}`,
+            overdue.length > 0 ? `❗ <b>Overdue:</b> ${overdue.length} task${overdue.length>1?'s':''}` : `✅ <b>No overdue tasks!</b>`,
+            `📩 <b>Pending follow-ups:</b> ${pending.length}`,
+          ]
+        );
+        return res.status(200).json(card);
       }
 
-      // /tasks or /active
-      if (text.includes('/tasks') || text.includes('/active') || text === 'tasks') {
-        const active = tasks.filter(t => t.status !== 'done').slice(0, 8);
-        if (!active.length) return res.json({ text: '✅ No active tasks right now!' });
-        return res.json({
-          text: `*${active.length} active tasks:*`,
-          cards: active.slice(0, 5).map(taskCard)
+      // /tasks — active tasks
+      if (msgText.includes('/tasks') || msgText.includes('tasks') || slashCmd === '2') {
+        if (!active.length) return res.status(200).json({ text: '✅ No active tasks right now!' });
+        const lines = active.slice(0,10).map(t => {
+          const s = { todo:'📋',inprogress:'⚡',review:'👁' }[t.status] || '📋';
+          return `${s} <b>${t.title}</b>${t.client_name?' — '+t.client_name:''}${t.deadline?' (due '+String(t.deadline).slice(0,10)+')':''}`;
         });
+        if (active.length > 10) lines.push(`<i>...and ${active.length-10} more</i>`);
+        const card = makeCard({ title:`📋 Active Tasks (${active.length})` }, lines);
+        return res.status(200).json(card);
       }
 
       // /overdue
-      if (text.includes('/overdue') || text === 'overdue') {
-        const overdue = tasks.filter(t => t.deadline && t.status !== 'done' && new Date(t.deadline) < new Date());
-        if (!overdue.length) return res.json({ text: '✅ No overdue tasks! Great work 🎉' });
-        return res.json({
-          text: `⚠️ *${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}:*`,
-          cards: overdue.slice(0, 5).map(taskCard)
-        });
+      if (msgText.includes('/overdue') || msgText.includes('overdue') || slashCmd === '3') {
+        if (!overdue.length) return res.status(200).json({ text: '✅ No overdue tasks! Great work 🎉' });
+        const lines = overdue.slice(0,8).map(t =>
+          `❗ <b>${t.title}</b>${t.client_name?' — '+t.client_name:''} (due ${String(t.deadline).slice(0,10)})`
+        );
+        const card = makeCard({ title:`⚠️ Overdue Tasks (${overdue.length})`, subtitle:'These need immediate attention' }, lines);
+        return res.status(200).json(card);
       }
 
       // /followups
-      if (text.includes('/followups') || text.includes('/followup') || text === 'followups') {
-        const pending = followups.filter(f => f.status !== 'sent').slice(0, 8);
-        if (!pending.length) return res.json({ text: '✅ All follow-ups are done!' });
-        const lines = pending.map(f => `• *${f.subject}* — due ${String(f.due_date || '').slice(0,10) || 'no date'}`).join('\n');
-        return res.json({ text: `📩 *${pending.length} pending follow-ups:*\n${lines}\n\n<https://yoursocials.vercel.app/followups|Open Follow-ups →>` });
+      if (msgText.includes('/followup') || msgText.includes('followup') || slashCmd === '4') {
+        if (!pending.length) return res.status(200).json({ text: '✅ All follow-ups are done!' });
+        const lines = pending.slice(0,8).map(f =>
+          `📩 <b>${f.subject}</b>${f.due_date?' — due '+String(f.due_date).slice(0,10):''}`
+        );
+        const card = makeCard({ title:`📩 Pending Follow-ups (${pending.length})` }, lines);
+        return res.status(200).json(card);
       }
 
       // /leaderboard
-      if (text.includes('/leaderboard') || text === 'leaderboard') {
-        const top = members.sort((a,b) => (b.coins||0) - (a.coins||0)).slice(0, 5);
+      if (msgText.includes('/leaderboard') || msgText.includes('leaderboard') || slashCmd === '5') {
+        const top = [...members].sort((a,b)=>(b.coins||0)-(a.coins||0)).slice(0,5);
         const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
-        const lines = top.map((m,i) => `${medals[i]} *${m.name || m.email}* — ${m.coins || 0} 🪙`).join('\n');
-        return res.json({ text: `🏆 *Team Leaderboard*\n\n${lines}\n\n<https://yoursocials.vercel.app/leaderboard|View full leaderboard →>` });
+        const lines = top.map((m,i) => `${medals[i]} <b>${m.name||m.email}</b> — ${m.coins||0} 🪙`);
+        const card = makeCard({ title:'🏆 Team Leaderboard', subtitle:'Top performers this month' }, lines);
+        return res.status(200).json(card);
       }
 
-      // /help or anything else
-      return res.json({
-        text: `*Your Socials OS Commands:*\n• \`/today\` — daily summary\n• \`/tasks\` — active tasks\n• \`/overdue\` — overdue tasks\n• \`/followups\` — pending follow-ups\n• \`/leaderboard\` — team rankings\n\n🔗 <https://yoursocials.vercel.app|Open Your Socials OS>`
+      // Default / help
+      return res.status(200).json({
+        text: `*Your Socials OS Commands:*\n\n• \`/today\` — Daily task summary\n• \`/tasks\` — All active tasks\n• \`/overdue\` — Overdue tasks\n• \`/followups\` — Pending follow-ups\n• \`/leaderboard\` — Team coin rankings\n\n🔗 https://yoursocials.vercel.app`
       });
-
-    } catch(e) {
-      console.error('GChat bot error:', e.message);
-      return res.json({ text: '⚠️ Could not fetch data: ' + e.message });
     }
-  }
 
-  // Bot removed
-  if (type === 'REMOVED_FROM_SPACE') {
-    return res.status(200).end();
-  }
+    return res.status(200).json({ text: '👋 Hi! Type /today to get started.' });
 
-  return res.json({ text: 'Hello from Your Socials OS! 👋' });
+  } catch(e) {
+    console.error('[GChat Bot] Error:', e.message);
+    // Always return 200 to Google — never let it timeout
+    return res.status(200).json({ text: `⚠️ Error: ${e.message}. Please try again.` });
+  }
 }
+
+// Required: tell Next.js to parse JSON body
+export const config = { api: { bodyParser: true } };
