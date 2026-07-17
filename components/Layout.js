@@ -8,7 +8,6 @@ const NAV = [
   { path:'/',            icon:'🏠', label:'Dashboard' },
   { path:'/tasks',       icon:'✅', label:'Tasks',      badge:'tasks' },
   { path:'/calendar',    icon:'📅', label:'Calendar' },
-  { path:'/chat',        icon:'💬', label:'Chat' },
   { section:'Team' },
   { path:'/team',        icon:'👥', label:'Members' },
   { path:'/leaderboard', icon:'🏆', label:'Leaderboard' },
