@@ -16,6 +16,41 @@ function toBase64(file) {
   });
 }
 
+// Compress image to max 800px wide and quality 0.75 — keeps files small
+function compressImage(file, maxSize=1200, quality=0.80) {
+  return new Promise((resolve) => {
+    if (file.type.startsWith('video/')) {
+      // Can't compress video — just read as-is
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else       { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => {
+      // Fallback to raw base64 if canvas fails
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+
 function timeAgo(iso) {
   const m = Math.floor((Date.now()-new Date(iso))/60000);
   if (m < 1) return 'just now'; if (m < 60) return m+'m ago';
@@ -122,11 +157,14 @@ export default function Gallery() {
 
   async function handleFileSelect(e) {
     const files = Array.from(e.target.files || []);
+    setUploading(true); // show loading while compressing
     const previews = await Promise.all(files.map(async f => ({
-      file: f, preview: await toBase64(f),
+      file: f,
+      preview: await compressImage(f),
       type: f.type.startsWith('video/') ? 'video' : 'image',
       name: f.name, size: f.size,
     })));
+    setUploading(false);
     setUploadFiles(prev => [...prev, ...previews]);
     e.target.value = '';
   }
@@ -134,16 +172,37 @@ export default function Gallery() {
   async function submitUpload() {
     if (!uploadFiles.length) return;
     setUploading(true);
-    let ok = 0;
+    let ok = 0, failed = 0;
     for (const f of uploadFiles) {
-      if (f.size > 20*1024*1024) { toast.error(f.name + ' is too large (max 20MB)'); continue; }
-      await api('/api/gallery', 'POST', {
-        url:      f.preview,
-        type:     f.type,
-        caption:  uploadCaption,
-        album_id: uploadAlbum || null,
-      });
-      ok++;
+      try {
+        // Check compressed size — base64 is ~1.33x original
+        const approxBytes = (f.preview.length * 3) / 4;
+        if (approxBytes > 4 * 1024 * 1024) {
+          toast.error(f.name + ' is still too large after compression. Try a smaller file.');
+          failed++;
+          continue;
+        }
+        const result = await fetch('/api/gallery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url:      f.preview,
+            type:     f.type,
+            caption:  uploadCaption,
+            album_id: uploadAlbum || null,
+          }),
+        });
+        if (!result.ok) {
+          const err = await result.json().catch(() => ({}));
+          toast.error('Upload failed: ' + (err.error || result.status));
+          failed++;
+        } else {
+          ok++;
+        }
+      } catch(e) {
+        toast.error('Upload error: ' + e.message);
+        failed++;
+      }
     }
     setUploading(false);
     setShowUpload(false);
@@ -153,6 +212,9 @@ export default function Gallery() {
     if (ok > 0) {
       toast.success(`${ok} photo${ok>1?'s':''} submitted for admin approval ✅`);
       load();
+    }
+    if (failed > 0 && ok === 0) {
+      setShowUpload(true); // Keep modal open if everything failed
     }
   }
 
@@ -340,7 +402,7 @@ export default function Gallery() {
               style={{ border:'2px dashed var(--border2)', borderRadius:12, padding:'28px 20px', textAlign:'center', cursor:'pointer', transition:'all .15s', background:'var(--surface3)' }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--purple)';e.currentTarget.style.background='rgba(124,92,252,.06)';}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--surface3)';}}
-              onDrop={async e=>{e.preventDefault();const files=Array.from(e.dataTransfer.files);const previews=await Promise.all(files.map(async f=>({file:f,preview:await toBase64(f),type:f.type.startsWith('video/')?'video':'image',name:f.name,size:f.size})));setUploadFiles(p=>[...p,...previews]);}}
+              onDrop={async e=>{e.preventDefault();const files=Array.from(e.dataTransfer.files);const previews=await Promise.all(files.map(async f=>({file:f,preview:await compressImage(f),type:f.type.startsWith('video/')?'video':'image',name:f.name,size:f.size})));setUploadFiles(p=>[...p,...previews]);}}
               onDragOver={e=>e.preventDefault()}>
               <div style={{ fontSize:'2rem', marginBottom:8 }}>📸</div>
               <div style={{ fontWeight:600, fontSize:'.9rem', marginBottom:4 }}>Click or drag photos/videos here</div>
@@ -389,7 +451,7 @@ export default function Gallery() {
             <div style={{ display:'flex', gap:10 }}>
               <Btn variant="ghost" onClick={()=>{setShowUpload(false);setUploadFiles([]);}} style={{ flex:1 }}>Cancel</Btn>
               <Btn onClick={submitUpload} disabled={uploading||!uploadFiles.length} style={{ flex:2 }}>
-                {uploading ? '⏳ Uploading…' : `📸 Submit ${uploadFiles.length} Photo${uploadFiles.length!==1?'s':''}`}
+                {uploading ? '⏳ Submitting…' : uploadFiles.length === 0 ? '📸 Select Photos First' : `📸 Submit ${uploadFiles.length} Photo${uploadFiles.length!==1?'s':''}`}
               </Btn>
             </div>
           </div>
