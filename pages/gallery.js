@@ -260,7 +260,7 @@ export default function Gallery() {
 
   return (
     <Layout>
-      <div className="fade-up">
+      <div className="fade-up" style={{ padding:'0 4px' }}>
 
         {/* ── HEADER ── */}
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:20, gap:12, flexWrap:'wrap' }}>
@@ -348,49 +348,86 @@ export default function Gallery() {
           </div>
         )}
 
-        {/* ── PHOTO GRID (all photos or album photos) ── */}
+        {/* ── PHOTO GRID — staggered masonry like reference ── */}
         {!loading && (view==='grid' || activeAlbum) && (
           <div>
             {displayPhotos.length === 0 && (
-              <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--muted2)' }}>
-                <div style={{ fontSize:'3rem', marginBottom:12 }}>🖼️</div>
-                <div style={{ fontWeight:700, fontSize:'1rem', marginBottom:8 }}>
+              <div style={{ textAlign:'center', padding:'80px 20px', color:'var(--muted2)' }}>
+                <div style={{ fontSize:'3.5rem', marginBottom:16, opacity:.4 }}>🖼️</div>
+                <div style={{ fontWeight:700, fontSize:'1.1rem', marginBottom:10, color:'var(--text)' }}>
                   {activeAlbum ? 'No photos in this album yet' : 'No photos yet'}
                 </div>
-                <div style={{ fontSize:'.84rem', marginBottom:20, lineHeight:1.6 }}>
-                  {activeAlbum ? 'Upload photos and select this album.' : 'Be the first to upload a fun team moment!'}
+                <div style={{ fontSize:'.85rem', marginBottom:24, lineHeight:1.7, maxWidth:360, margin:'0 auto 24px' }}>
+                  {activeAlbum ? 'Upload photos and select this album.' : 'Upload your first team moment — photos appear here after admin approves them.'}
                 </div>
                 <Btn onClick={()=>setShowUpload(true)}>📸 Upload First Photo</Btn>
               </div>
             )}
-            <div style={{ columns:'repeat(auto-fill,minmax(220px,1fr))', columnGap:10, rowGap:10 }}>
-              {displayPhotos.map((photo, i) => (
-                <div key={photo.id}
-                  onClick={()=>setLightbox({items:displayPhotos, index:i})}
-                  style={{ breakInside:'avoid', marginBottom:10, borderRadius:12, overflow:'hidden', cursor:'pointer', position:'relative', background:'var(--surface2)' }}
-                  onMouseEnter={e=>e.currentTarget.querySelector('.overlay').style.opacity='1'}
-                  onMouseLeave={e=>e.currentTarget.querySelector('.overlay').style.opacity='0'}>
-                  {photo.type==='video'
-                    ? <video src={photo.url} style={{ width:'100%', display:'block' }}/>
-                    : <img src={photo.url} alt={photo.caption||''} style={{ width:'100%', display:'block' }} loading="lazy"/>
-                  }
-                  {/* Hover overlay */}
-                  <div className="overlay" style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%)', opacity:0, transition:'opacity .2s', display:'flex', flexDirection:'column', justifyContent:'flex-end', padding:'12px 10px' }}>
-                    {photo.caption && <div style={{ color:'#fff', fontSize:'.78rem', fontWeight:600, marginBottom:4, lineHeight:1.3 }}>{photo.caption}</div>}
-                    <div style={{ color:'rgba(255,255,255,.7)', fontSize:'.68rem' }}>📸 {photo.uploader_name} · {timeAgo(photo.created_at)}</div>
-                    {isAdmin && (
-                      <button onClick={e=>deletePhoto(photo.id,e)}
-                        style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,.6)', border:'none', borderRadius:6, width:28, height:28, color:'#FF4D6D', cursor:'pointer', fontSize:'.75rem', display:'flex', alignItems:'center', justifyContent:'center' }}>🗑</button>
-                    )}
-                  </div>
-                  {photo.type==='video' && (
-                    <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:44, height:44, borderRadius:'50%', background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', pointerEvents:'none' }}>▶</div>
-                  )}
+
+            {/* 4-column staggered masonry grid */}
+            {displayPhotos.length > 0 && (() => {
+              // Distribute photos into 4 columns
+              const numCols = typeof window !== 'undefined' && window.innerWidth < 600 ? 2 : 4;
+              const cols = Array.from({length: numCols}, () => []);
+              displayPhotos.forEach((photo, i) => cols[i % numCols].push({photo, index: i}));
+              return (
+                <div style={{ display:'grid', gridTemplateColumns:`repeat(${numCols}, 1fr)`, gap:10, alignItems:'start' }}>
+                  {cols.map((col, ci) => (
+                    <div key={ci} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                      {col.map(({photo, index}, pi) => {
+                        // Vary heights: tall, medium, short in a repeating pattern
+                        const heights = ['280px','200px','240px','320px','180px','260px'];
+                        const h = photo.type === 'video' ? '220px' : heights[(ci * 2 + pi) % heights.length];
+                        return (
+                          <div key={photo.id}
+                            onClick={() => setLightbox({items: displayPhotos, index})}
+                            className="gallery-item"
+                            style={{ position:'relative', borderRadius:14, overflow:'hidden', cursor:'pointer', height: h, background:'var(--surface2)' }}>
+                            {photo.type === 'video'
+                              ? <video src={photo.url} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                              : <img src={photo.url} alt={photo.caption||''} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', transition:'transform .4s ease' }} loading="lazy"/>
+                            }
+                            {/* Overlay on hover */}
+                            <div className="gallery-overlay" style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.1) 50%, transparent 100%)', opacity:0, transition:'opacity .25s', display:'flex', flexDirection:'column', justifyContent:'flex-end', padding:'14px 12px' }}>
+                              {photo.caption && (
+                                <div style={{ color:'#fff', fontSize:'.82rem', fontWeight:600, marginBottom:5, lineHeight:1.35 }}>{photo.caption}</div>
+                              )}
+                              <div style={{ color:'rgba(255,255,255,.65)', fontSize:'.7rem', display:'flex', alignItems:'center', gap:6 }}>
+                                <span>📸</span>
+                                <span>{photo.uploader_name}</span>
+                                <span>·</span>
+                                <span>{timeAgo(photo.created_at)}</span>
+                              </div>
+                              {isAdmin && (
+                                <button onClick={e => deletePhoto(photo.id, e)}
+                                  style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', border:'none', borderRadius:'50%', width:30, height:30, color:'#FF4D6D', cursor:'pointer', fontSize:'.78rem', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s' }}
+                                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.4)'}
+                                  onMouseLeave={e=>e.currentTarget.style.background='rgba(0,0,0,.55)'}>
+                                  🗑
+                                </button>
+                              )}
+                            </div>
+                            {photo.type === 'video' && (
+                              <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:48, height:48, borderRadius:'50%', background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', pointerEvents:'none' }}>▶</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         )}
+
+        <style>{`
+          .gallery-item:hover img { transform: scale(1.04); }
+          .gallery-item:hover .gallery-overlay { opacity: 1 !important; }
+          @media (max-width: 600px) {
+            .gallery-item { border-radius: 10px !important; }
+          }
+        `}</style>
       </div>
 
       {/* ── UPLOAD MODAL ── */}
