@@ -400,9 +400,10 @@ export default function Gallery() {
                               </div>
                               {isAdmin && (
                                 <button onClick={e => deletePhoto(photo.id, e)}
-                                  style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', border:'none', borderRadius:'50%', width:30, height:30, color:'#FF4D6D', cursor:'pointer', fontSize:'.78rem', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s' }}
-                                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.4)'}
-                                  onMouseLeave={e=>e.currentTarget.style.background='rgba(0,0,0,.55)'}>
+                                  title="Delete photo"
+                                  style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,.7)', backdropFilter:'blur(6px)', border:'1px solid rgba(255,77,109,.4)', borderRadius:8, width:32, height:32, color:'#FF4D6D', cursor:'pointer', fontSize:'.82rem', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s', zIndex:10 }}
+                                  onMouseEnter={e=>{e.currentTarget.style.background='#FF4D6D';e.currentTarget.style.color='#fff';}}
+                                  onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,0,0,.7)';e.currentTarget.style.color='#FF4D6D';}}>
                                   🗑
                                 </button>
                               )}
