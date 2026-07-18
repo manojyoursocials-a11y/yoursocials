@@ -333,7 +333,7 @@ export default function Gallery() {
 
       {/* ── UPLOAD MODAL ── */}
       {showUpload && (
-        <Modal title="📸 Upload Photos / Videos" onClose={()=>{setShowUpload(false);setUploadFiles([]);}}>
+        <Modal open={showUpload} title="📸 Upload Photos / Videos" onClose={()=>{setShowUpload(false);setUploadFiles([]);}}>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {/* Drop zone */}
             <div onClick={()=>fileRef.current?.click()}
@@ -398,7 +398,7 @@ export default function Gallery() {
 
       {/* ── NEW ALBUM MODAL ── */}
       {showNewAlbum && (
-        <Modal title="📁 Create New Album" onClose={()=>{setShowNewAlbum(false);setAlbumName('');setAlbumDesc('');}}>
+        <Modal open={showNewAlbum} title="📁 Create New Album" onClose={()=>{setShowNewAlbum(false);setAlbumName('');setAlbumDesc('');}}>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
             <div>
               <div style={{ fontSize:'.78rem', fontWeight:600, marginBottom:6 }}>Album Name *</div>
@@ -418,7 +418,7 @@ export default function Gallery() {
 
       {/* ── PENDING APPROVAL MODAL ── */}
       {showPending && (
-        <Modal title={`🕐 Pending Approval (${pending.length})`} onClose={()=>setShowPending(false)} style={{ maxWidth:720 }}>
+        <Modal open={showPending} title={`🕐 Pending Approval (${pending.length})`} onClose={()=>setShowPending(false)} width={720}>
           <div style={{ display:'flex', flexDirection:'column', gap:12, maxHeight:'70vh', overflowY:'auto' }}>
             {pending.length === 0 && (
               <div style={{ textAlign:'center', padding:'40px 0', color:'var(--muted2)' }}>
