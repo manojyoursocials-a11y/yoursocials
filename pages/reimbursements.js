@@ -324,15 +324,33 @@ export default function Reimbursements() {
             </div>
           </div>
 
-          {/* Title + amount */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10 }}>
-            <div>
-              <div style={{ fontSize:'.78rem', fontWeight:600, marginBottom:6 }}>Title *</div>
-              <Input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Uber to client meeting"/>
-            </div>
-            <div>
-              <div style={{ fontSize:'.78rem', fontWeight:600, marginBottom:6 }}>Amount (₹) *</div>
-              <Input type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0.00" style={{ width:110 }}/>
+          {/* Title */}
+          <div>
+            <div style={{ fontSize:'.78rem', fontWeight:600, marginBottom:6 }}>Title *</div>
+            <Input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="e.g. Uber to client meeting, Figma subscription"/>
+          </div>
+
+          {/* Amount — full width, prominent */}
+          <div>
+            <div style={{ fontSize:'.78rem', fontWeight:600, marginBottom:6 }}>Amount *</div>
+            <div style={{ position:'relative' }}>
+              <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', fontSize:'1.1rem', fontWeight:800, color:'var(--text)', pointerEvents:'none', zIndex:1 }}>₹</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.amount}
+                onChange={e=>setForm(f=>({...f,amount:e.target.value}))}
+                placeholder="0.00"
+                style={{ width:'100%', background:'var(--surface3)', border:'2px solid var(--purple)', borderRadius:10, padding:'14px 16px 14px 36px', fontSize:'1.4rem', fontWeight:800, color:'var(--text)', fontFamily:'Inter,sans-serif', outline:'none', boxSizing:'border-box', letterSpacing:'.02em' }}
+                onFocus={e=>e.target.style.borderColor='var(--purple2)'}
+                onBlur={e=>e.target.style.borderColor='var(--purple)'}
+              />
+              {form.amount && parseFloat(form.amount) > 0 && (
+                <div style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', fontSize:'.75rem', color:'var(--green)', fontWeight:700 }}>
+                  ₹{parseFloat(form.amount).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </div>
+              )}
             </div>
           </div>
 
