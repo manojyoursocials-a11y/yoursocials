@@ -11,6 +11,7 @@ const NAV = [
   { section:'Team' },
   { path:'/team',        icon:'👥', label:'Members' },
   { path:'/gallery',     icon:'🖼️', label:'Gallery' },
+  { path:'/reimbursements', icon:'💸', label:'Reimbursements' },
   { path:'/leaderboard', icon:'🏆', label:'Leaderboard' },
   { path:'/rewards',     icon:'🎁', label:'Rewards' },
   { section:'Work' },
