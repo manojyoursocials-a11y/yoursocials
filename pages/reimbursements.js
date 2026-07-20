@@ -256,7 +256,7 @@ export default function Reimbursements() {
 
                   {/* Admin action buttons */}
                   {isAdmin && (
-                    <div style={{ display:'flex', gap:6', flexWrap:'wrap', justifyContent:'flex-end' }}>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
                       {item.status === 'pending' && (
                         <>
                           <button onClick={()=>{setShowReview({item,action:'approved'});setAdminNote('');}}
