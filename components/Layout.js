@@ -12,6 +12,7 @@ const NAV = [
   { path:'/team',        icon:'👥', label:'Members' },
   { path:'/gallery',     icon:'🖼️', label:'Gallery' },
   { path:'/reimbursements', icon:'💸', label:'Reimbursements' },
+  { path:'/leads',          icon:'🎯', label:'Lead CRM' },
   { path:'/leaderboard', icon:'🏆', label:'Leaderboard' },
   { path:'/rewards',     icon:'🎁', label:'Rewards' },
   { section:'Work' },
