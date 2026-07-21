@@ -123,7 +123,11 @@ export default function Calendar() {
     setLoading(false);
   }, [curDate]);
 
-  useEffect(() => { if (status === 'authenticated') loadAll(); }, [status]);
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    loadAll();
+    loadImportantDays();
+  }, [status]);
 
   // ── Month navigation ───────────────────────────────────────
   function prevMonth() { const d = new Date(curDate.getFullYear(), curDate.getMonth()-1, 1); setCurDate(d); loadMonthPosts(d); }
@@ -455,6 +459,10 @@ export default function Calendar() {
             <div style={{ display:'flex', gap:6 }}>
               <Btn variant="ghost" size="sm" onClick={() => exportCSV('all')}>📥 Export</Btn>
               <Btn variant="ghost" size="sm" onClick={() => { setImportData([]); setImportError(''); setImportModal(true); }}>📤 Import</Btn>
+              <button onClick={()=>setShowDayPanel(o=>!o)}
+                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', background:showDayPanel?'rgba(255,77,109,.15)':'var(--surface2)', border:`1px solid ${showDayPanel?'rgba(255,77,109,.4)':'var(--border)'}`, borderRadius:8, color:showDayPanel?'#FF4D6D':'var(--muted2)', cursor:'pointer', fontSize:'.76rem', fontWeight:600, fontFamily:'Inter,sans-serif', transition:'all .15s', whiteSpace:'nowrap' }}>
+                🎉 Festivals{importantDays.length>0?' ('+importantDays.length+')':''}
+              </button>
             </div>
             <Btn onClick={() => openNewPost(selectedDay || todayStr)}>+ New Post</Btn>
           </div>
@@ -741,6 +749,89 @@ export default function Calendar() {
           </Btn>
         </div>
       </Modal>
+      {/* ── FESTIVALS PANEL ── */}
+      {showDayPanel && (
+        <div style={{ position:'fixed', top:0, right:0, bottom:0, width:'min(340px,100vw)', background:'var(--surface)', borderLeft:'1px solid var(--border2)', zIndex:998, display:'flex', flexDirection:'column', boxShadow:'-8px 0 40px rgba(0,0,0,.4)', animation:'slideInRight .2s ease' }}>
+          <div style={{ padding:'16px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+            <div style={{ fontWeight:900, fontSize:'1rem' }}>🎉 Festivals & Important Days</div>
+            <button onClick={()=>setShowDayPanel(false)} style={{ background:'var(--surface3)', border:'1px solid var(--border)', borderRadius:8, width:28, height:28, cursor:'pointer', color:'var(--muted2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.85rem' }}>✕</button>
+          </div>
+
+          {/* Add form */}
+          <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+            <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:10 }}>Add Important Day</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={dayForm.emoji} onChange={e=>setDayForm(f=>({...f,emoji:e.target.value}))}
+                  style={{ width:48, background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, padding:'8px 4px', fontSize:'1.1rem', textAlign:'center', color:'var(--text)', fontFamily:'inherit', outline:'none' }}
+                  placeholder="🎉" maxLength={4}/>
+                <input value={dayForm.title} onChange={e=>setDayForm(f=>({...f,title:e.target.value}))}
+                  placeholder="Festival or event name…"
+                  style={{ flex:1, background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, padding:'8px 10px', fontSize:'.82rem', color:'var(--text)', fontFamily:'inherit', outline:'none' }}
+                  onKeyDown={e=>{ if(e.key==='Enter') document.getElementById('add-day-btn').click(); }}/>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input type="date" value={dayForm.date} onChange={e=>setDayForm(f=>({...f,date:e.target.value}))}
+                  style={{ flex:1, background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, padding:'8px 10px', fontSize:'.82rem', color:'var(--text)', fontFamily:'inherit', outline:'none' }}/>
+                <input type="color" value={dayForm.color} onChange={e=>setDayForm(f=>({...f,color:e.target.value}))}
+                  title="Pick colour" style={{ width:40, height:38, padding:2, background:'var(--surface3)', border:'1px solid var(--border2)', borderRadius:8, cursor:'pointer' }}/>
+              </div>
+              <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:'.78rem', color:'var(--muted2)', cursor:'pointer' }}>
+                <input type="checkbox" checked={dayForm.recurring} onChange={e=>setDayForm(f=>({...f,recurring:e.target.checked}))} style={{ accentColor:'var(--purple)', width:15, height:15 }}/>
+                Repeat every year
+              </label>
+              <button id="add-day-btn"
+                disabled={addingDay || !dayForm.title.trim() || !dayForm.date}
+                onClick={async()=>{
+                  setAddingDay(true);
+                  try {
+                    await fetch('/api/important-days',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dayForm)});
+                    setDayForm({title:'',date:'',color:'#FF4D6D',emoji:'🎉',recurring:true});
+                    await loadImportantDays();
+                  } catch(e) {}
+                  setAddingDay(false);
+                }}
+                style={{ padding:'9px', background:'linear-gradient(135deg,#FF4D6D,#FF9F43)', border:'none', borderRadius:9, color:'#fff', fontWeight:700, cursor:'pointer', fontSize:'.82rem', fontFamily:'inherit', opacity:addingDay||!dayForm.title.trim()||!dayForm.date?0.5:1 }}>
+                {addingDay ? '⏳ Adding…' : '🎉 Add to Calendar'}
+              </button>
+            </div>
+          </div>
+
+          {/* List */}
+          <div style={{ flex:1, overflowY:'auto', padding:'12px 18px' }}>
+            {importantDays.length === 0 && (
+              <div style={{ textAlign:'center', padding:'40px 0', color:'var(--muted2)' }}>
+                <div style={{ fontSize:'2.5rem', marginBottom:8, opacity:.4 }}>🎉</div>
+                <div style={{ fontSize:'.82rem' }}>No important days yet.<br/>Add Diwali, Pongal, birthdays…</div>
+              </div>
+            )}
+            {importantDays.map(day => {
+              const d = new Date(day.date + 'T00:00:00');
+              const isToday = day.date === todayStr;
+              const isPast  = new Date(day.date + 'T23:59:59') < new Date() && !isToday;
+              return (
+                <div key={day.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:isToday?day.color+'11':'var(--surface2)', border:`1px solid ${isToday?day.color+'55':'var(--border)'}`, borderRadius:10, marginBottom:6, opacity:isPast?0.5:1 }}>
+                  <div style={{ width:36, height:36, borderRadius:9, background:day.color+'22', border:`1.5px solid ${day.color}44`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.1rem', flexShrink:0 }}>
+                    {day.emoji}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:'.84rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{day.title}</div>
+                    <div style={{ fontSize:'.7rem', color:'var(--muted2)', marginTop:2 }}>
+                      {d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                      {day.recurring && <span style={{ marginLeft:6, color:day.color, fontWeight:600 }}>↻ yearly</span>}
+                    </div>
+                  </div>
+                  {isToday && <span style={{ fontSize:'.6rem', fontWeight:800, color:day.color, background:day.color+'18', padding:'2px 7px', borderRadius:20, flexShrink:0 }}>TODAY</span>}
+                  <button onClick={async()=>{ await fetch('/api/important-days?id='+day.id,{method:'DELETE'}); loadImportantDays(); }}
+                    style={{ background:'none', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:'.8rem', padding:4, opacity:.5, flexShrink:0 }}>🗑</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
     </Layout>
   );
 }
