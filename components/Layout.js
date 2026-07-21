@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import NotificationBell from './NotificationBell';
 import { useRouter } from 'next/router';
 import { useSession, signOut } from 'next-auth/react';
