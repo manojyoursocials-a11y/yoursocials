@@ -53,17 +53,95 @@ function useLiveCoins(sessionCoins) {
 }
 
 function LiveClock() {
-  const [now, setNow] = useState(new Date());
+  const [now,  setNow]  = useState(new Date());
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  const date = now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
-  const time = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
+
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const time   = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+  const dayName= now.toLocaleDateString('en-IN', { weekday:'long' });
+  const dayNum = now.getDate();
+  const month  = now.toLocaleDateString('en-IN', { month:'long', year:'numeric' });
+  const dateShort = now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
+
+  // Mini calendar
+  const year  = now.getFullYear();
+  const mon   = now.getMonth();
+  const first = new Date(year, mon, 1).getDay();
+  const days  = new Date(year, mon + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first; i++) cells.push(null);
+  for (let d = 1; d <= days; d++) cells.push(d);
+
   return (
-    <div style={{ textAlign:'right', lineHeight:1.3 }}>
-      <div style={{ fontSize:'.75rem', color:'var(--muted2)', fontWeight:500 }}>{date}</div>
-      <div style={{ fontSize:'.72rem', color:'var(--muted)', fontFamily:'monospace' }}>{time}</div>
+    <div ref={ref} style={{ position:'relative' }}>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ background:'none', border:'none', cursor:'pointer', textAlign:'right', lineHeight:1.3, padding:'4px 8px', borderRadius:8, transition:'background .15s' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface3)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+      >
+        <div style={{ fontSize:'.72rem', color:'var(--muted2)', fontWeight:600 }}>{dateShort}</div>
+        <div style={{ fontSize:'.7rem', color:'var(--muted)', fontFamily:'monospace', letterSpacing:'.04em' }}>{time}</div>
+      </button>
+
+      {/* Popover — matches reference style */}
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 8px)', right:0,
+          width:280, background:'#1a1a2a',
+          border:'1px solid rgba(255,255,255,.1)',
+          borderRadius:16, boxShadow:'0 20px 60px rgba(0,0,0,.6)',
+          zIndex:9999, overflow:'hidden',
+          animation:'ys-in .2s ease',
+        }}>
+          {/* Time */}
+          <div style={{ padding:'20px 20px 14px', borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+            <div style={{ fontSize:'2.2rem', fontWeight:800, color:'#F0EFFF', fontFamily:'monospace', letterSpacing:'-.01em', lineHeight:1 }}>{time}</div>
+            <div style={{ fontSize:'.82rem', color:'rgba(255,255,255,.5)', marginTop:5 }}>{dayName}, {dayNum} {now.toLocaleDateString('en-IN',{month:'long'})}</div>
+          </div>
+
+          {/* Mini calendar */}
+          <div style={{ padding:'14px 16px 16px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <span style={{ fontSize:'.82rem', fontWeight:700, color:'#F0EFFF' }}>{month}</span>
+            </div>
+            {/* Day headers */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:6 }}>
+              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                <div key={d} style={{ textAlign:'center', fontSize:'.65rem', color:'rgba(255,255,255,.35)', fontWeight:600, padding:'2px 0' }}>{d}</div>
+              ))}
+            </div>
+            {/* Date cells */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+              {cells.map((d, i) => (
+                <div key={i} style={{
+                  textAlign:'center', fontSize:'.75rem', padding:'4px 2px', borderRadius:6,
+                  background: d === dayNum ? '#E91E8C' : 'transparent',
+                  color: d === dayNum ? '#fff' : d ? 'rgba(255,255,255,.65)' : 'transparent',
+                  fontWeight: d === dayNum ? 800 : 400,
+                }}>
+                  {d || ''}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`@keyframes ys-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
   );
 }

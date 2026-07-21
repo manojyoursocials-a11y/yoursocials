@@ -90,9 +90,20 @@ export default function Calendar() {
   const [importing,   setImporting]   = useState(false);
   const [importError, setImportError] = useState('');
 
+  // Important days / festivals
+  const [importantDays,    setImportantDays]    = useState([]);
+  const [showDayPanel,     setShowDayPanel]     = useState(false);
+  const [dayForm,          setDayForm]          = useState({ title:'', date:'', color:'#FF4D6D', emoji:'🎉', recurring:true });
+  const [addingDay,        setAddingDay]        = useState(false);
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   // ── Data loading ───────────────────────────────────────────
+  async function loadImportantDays() {
+    const d = await fetch('/api/important-days').then(r=>r.json());
+    setImportantDays(Array.isArray(d) ? d : []);
+  }
+
   async function loadMonthPosts(date) {
     const y = date.getFullYear(), m = date.getMonth();
     const from = `${y}-${String(m+1).padStart(2,'0')}-01`;
