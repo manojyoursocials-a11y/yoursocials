@@ -489,7 +489,37 @@ export default function Calendar() {
                     const isSel   = cell.dateStr === selectedDay;
                     return (
                       <div key={ci} onClick={() => cell.dateStr && setSelectedDay(cell.dateStr)}
-                        style={{ borderRight: ci<6 ? '1px solid var(--border)' : 'none', padding: isMobile ? '5px 4px' : '8px 8px 6px', background: isSel ? 'rgba(124,92,252,.06)' : isToday ? 'rgba(124,92,252,.04)' : 'transparent', cursor:'pointer', transition:'background .1s', position:'relative' }}>
+                        style={{ borderRight: ci<6 ? '1px solid var(--border)' : 'none', padding: isMobile ? '5px 4px' : '8px 8px 6px', background: (() => {
+                          if (isSel) return 'rgba(124,92,252,.06)';
+                          if (isToday) return 'rgba(124,92,252,.04)';
+                          const hasFest = cell.dateStr && importantDays.some(d => {
+                            if (!d || !d.date) return false;
+                            const dStr = String(d.date).slice(0, 10);
+                            return d.recurring ? dStr.slice(5) === cell.dateStr.slice(5) : dStr === cell.dateStr;
+                          });
+                          return hasFest ? 'rgba(255,77,109,.03)' : 'transparent';
+                        })(), cursor:'pointer', transition:'background .1s', position:'relative' }}>
+                        {/* Festival badge for this date */}
+                        {cell.dateStr && (() => {
+                          const cellFestivals = importantDays.filter(d => {
+                            if (!d || !d.date) return false;
+                            const dStr = String(d.date).slice(0, 10);
+                            if (d.recurring) return dStr.slice(5) === cell.dateStr.slice(5);
+                            return dStr === cell.dateStr;
+                          });
+                          return cellFestivals.length > 0 ? (
+                            <div style={{ marginBottom: 3 }}>
+                              {cellFestivals.slice(0, 2).map(fd => (
+                                <div key={fd.id}
+                                  title={fd.title}
+                                  style={{ display:'flex', alignItems:'center', gap:3, padding: isMobile?'1px 4px':'2px 6px', borderRadius:5, background:fd.color+'20', borderLeft:`3px solid ${fd.color}`, marginBottom:2, fontSize: isMobile?'.55rem':'.65rem', fontWeight:700, color:fd.color, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>
+                                  <span>{fd.emoji}</span>
+                                  {!isMobile && <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{fd.title}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
                           <span style={{ width: isMobile?20:24, height: isMobile?20:24, borderRadius:'50%', background: isToday ? 'var(--purple)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', fontSize: isMobile ? '.65rem' : '.78rem', fontWeight: isToday ? 700 : 500, color: !cell.day ? 'var(--border2)' : isToday ? '#fff' : 'var(--muted2)' }}>
                             {cell.day || ''}
