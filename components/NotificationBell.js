@@ -206,7 +206,7 @@ export default function NotificationBell() {
     if (status !== 'authenticated') return;
     sinceRef.current = new Date(Date.now() - 300000).toISOString(); // 5 min back
     fetchAll();
-    const timer = setInterval(poll, 4000);
+    const timer = setInterval(poll, 30000);
     navigator.serviceWorker?.ready.then(reg => {
       reg.active?.postMessage({ type:'START', since: sinceRef.current });
     });

@@ -2,7 +2,7 @@
 // Handles: Web Push notifications + background polling
 
 const VAPID_PUBLIC = 'BJksSkC9PcN_58qBiwEjZc460b6BR2L3fKpEmCW5S0W9qW7cFrfomcg74GIRZi79fHZfuDt_NXZfp0sEiq4m6ds';
-const POLL_MS      = 10000;
+const POLL_MS = 60000;
 
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(clients.claim()));
