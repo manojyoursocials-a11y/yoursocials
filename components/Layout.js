@@ -46,7 +46,7 @@ function useLiveCoins(sessionCoins) {
       } catch(e) {}
     }
     fetchCoins();
-    const t = setInterval(fetchCoins, 8000);
+    const t = setInterval(fetchCoins, 60000);
     return () => { mounted = false; clearInterval(t); };
   }, []);
   return coins;
