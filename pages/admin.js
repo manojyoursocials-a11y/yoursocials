@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Card, Btn, Modal, Input, Select, Textarea, Avatar, Spinner, EmptyState, toast, sounds, api, MEMBER_COLORS } from '../components/UI';
 
-const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups','Finance','Notifications'];
+const TABS = ['Users','Coins','Clients','Tasks','Rewards','Follow-ups','Finance','Notifications','Backup'];
 
 export default function Admin() {
   const { data: session, status } = useSession();
