@@ -433,7 +433,7 @@ export default function Admin() {
         )}
       </div>
 
-      {tab==='Finance'&&(
+        {tab==='Finance'&&(
           <div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
               <div>
@@ -925,6 +925,81 @@ export default function Admin() {
         )}
       </Modal>
       {/* Coin Reset Confirm Modal */}
+      {/* ── BACKUP TAB ── */}
+      {tab==='Backup'&&(
+        <div style={{maxWidth:580}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
+            <div style={{width:44,height:44,borderRadius:12,background:'rgba(0,229,160,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem',flexShrink:0}}>💾</div>
+            <div>
+              <h3 style={{fontWeight:900,fontSize:'1.1rem',margin:0}}>Data Backup</h3>
+              <p style={{fontSize:'.78rem',color:'var(--muted2)',margin:0,marginTop:2}}>Download your full database — save to Google Drive or locally</p>
+            </div>
+          </div>
+
+          {/* Download */}
+          <Card style={{marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:8}}>📥 Download Full Backup</div>
+            <div style={{fontSize:'.8rem',color:'var(--muted2)',lineHeight:1.7,marginBottom:14}}>
+              Downloads all data as a JSON file — users, tasks, clients, follow-ups, finance, gallery, leads, important days. Save this file to Google Drive weekly.
+            </div>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+              <a href="/api/backup" download
+                style={{display:'inline-flex',alignItems:'center',gap:8,padding:'10px 20px',background:'rgba(0,229,160,.15)',border:'1px solid rgba(0,229,160,.3)',borderRadius:10,color:'var(--green)',fontSize:'.88rem',fontWeight:700,textDecoration:'none',fontFamily:'Inter,sans-serif'}}>
+                💾 Download Backup Now
+              </a>
+            </div>
+          </Card>
+
+          {/* Save to Google Drive steps */}
+          <Card style={{marginBottom:16,background:'rgba(0,172,71,.04)',borderColor:'rgba(0,172,71,.2)'}}>
+            <div style={{fontWeight:700,fontSize:'.9rem',color:'#00AC47',marginBottom:12}}>
+              <img src="https://www.gstatic.com/images/branding/product/1x/drive_2020q4_48dp.png" width={20} height={20} style={{verticalAlign:'middle',marginRight:8}} onError={e=>e.target.style.display='none'}/>
+              How to save to Google Drive daily
+            </div>
+            {[
+              {n:'1',t:'Download the backup',d:'Click "Download Backup Now" above — saves a file like yoursocials-backup-2026-07-22.json'},
+              {n:'2',t:'Open Google Drive',d:'Go to drive.google.com → create a folder called "Your Socials Backups"'},
+              {n:'3',t:'Upload the file',d:'Drag the downloaded JSON file into the folder. Takes 2 seconds.'},
+              {n:'4',t:'Set a reminder',d:'Do this every Monday morning before starting work — takes 30 seconds total'},
+            ].map(step=>(
+              <div key={step.n} style={{display:'flex',gap:12,marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>
+                <div style={{width:28,height:28,borderRadius:'50%',background:'rgba(0,172,71,.15)',color:'#00AC47',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.8rem',fontWeight:800,flexShrink:0}}>{step.n}</div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:'.84rem',marginBottom:3}}>{step.t}</div>
+                  <div style={{fontSize:'.76rem',color:'var(--muted2)',lineHeight:1.5}}>{step.d}</div>
+                </div>
+              </div>
+            ))}
+          </Card>
+
+          {/* Neon auto backups */}
+          <Card style={{marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:8}}>🔄 Automatic Backups (Neon)</div>
+            <div style={{fontSize:'.8rem',color:'var(--muted2)',lineHeight:1.7,marginBottom:12}}>
+              Your database host (Neon) automatically keeps <strong style={{color:'var(--text)'}}>7 days</strong> of full point-in-time backups. If anything is accidentally deleted, you can restore to any moment in the last 7 days — free, no action needed.
+            </div>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+              <a href="https://neon.tech" target="_blank" rel="noopener noreferrer"
+                style={{display:'inline-flex',alignItems:'center',gap:8,padding:'8px 16px',background:'rgba(0,212,255,.1)',border:'1px solid rgba(0,212,255,.25)',borderRadius:9,color:'var(--cyan)',fontSize:'.82rem',fontWeight:600,textDecoration:'none',fontFamily:'inherit'}}>
+                ↗ Open Neon Dashboard
+              </a>
+            </div>
+          </Card>
+
+          {/* GitHub backup */}
+          <Card>
+            <div style={{fontWeight:700,fontSize:'.9rem',marginBottom:8}}>📁 Code Backup (GitHub)</div>
+            <div style={{fontSize:'.8rem',color:'var(--muted2)',lineHeight:1.7,marginBottom:12}}>
+              Your entire app code is already backed up on GitHub. If Vercel goes down, push new code and it redeploys in 2 minutes. Your code is safe.
+            </div>
+            <a href="https://github.com/manojyoursocials-a11y/yoursocials" target="_blank" rel="noopener noreferrer"
+              style={{display:'inline-flex',alignItems:'center',gap:8,padding:'8px 16px',background:'var(--surface3)',border:'1px solid var(--border2)',borderRadius:9,color:'var(--muted2)',fontSize:'.82rem',fontWeight:600,textDecoration:'none',fontFamily:'inherit'}}>
+              ↗ View on GitHub
+            </a>
+          </Card>
+        </div>
+      )}
+
       <Modal open={!!coinResetUser} onClose={()=>setCoinResetUser(null)} title="Reset Coins" width={380}>
         {coinResetUser&&<>
           <div style={{textAlign:'center',padding:'12px 0 20px'}}>
