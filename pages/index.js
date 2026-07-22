@@ -11,7 +11,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   useEffect(() => { if (status==='unauthenticated') router.replace('/login'); }, [status]);
   const fetchData = useCallback(async () => {
-    try { const d = await api('/api/dashboard'); if(d&&!d.error) { setData(d); setLoading(false); } } catch(e){}
+    try {
+      const d = await api('/api/dashboard');
+      if (d && !d.error) setData(d);
+      else if (d?.error) console.error('Dashboard error:', d.error);
+    } catch(e) {
+      console.error('Dashboard fetch error:', e.message);
+    } finally {
+      setLoading(false); // ALWAYS stop loading
+    }
   }, []);
   useEffect(() => {
     if (status==='authenticated') {
