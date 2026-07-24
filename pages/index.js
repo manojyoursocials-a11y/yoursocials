@@ -7,9 +7,14 @@ import { Card, Ring, ProgressBar, Tag, Avatar, Spinner, MEMBER_COLORS, api } fro
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data,       setData]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [allTasks,   setAllTasks]   = useState([]);
+  const [panel,      setPanel]      = useState(null); // 'done'|'inprogress'|'review'|'todo'|'overdue'
+  const [allMembers, setAllMembers] = useState([]);
   useEffect(() => { if (status==='unauthenticated') router.replace('/login'); }, [status]);
+  const isAdmin = session?.user?.role === 'admin';
+
   const fetchData = useCallback(async () => {
     try {
       const d = await api('/api/dashboard');
@@ -18,13 +23,24 @@ export default function Dashboard() {
     } catch(e) {
       console.error('Dashboard fetch error:', e.message);
     } finally {
-      setLoading(false); // ALWAYS stop loading
+      setLoading(false);
     }
   }, []);
+
+  // Load all tasks + members for admin detail view
+  const fetchAdminData = useCallback(async () => {
+    if (!session || session.user.role !== 'admin') return;
+    try {
+      const [t, m] = await Promise.all([api('/api/tasks'), api('/api/members')]);
+      if (Array.isArray(t)) setAllTasks(t);
+      if (Array.isArray(m)) setAllMembers(m);
+    } catch(e) {}
+  }, [session]);
   useEffect(() => {
     if (status==='authenticated') {
       fetch('/api/setup',{method:'POST'}).finally(fetchData);
-      const t = setInterval(fetchData, 10000);
+      fetchAdminData();
+      const t = setInterval(fetchData, 60000);
       return () => clearInterval(t);
     }
   }, [status, fetchData]);
@@ -42,7 +58,7 @@ export default function Dashboard() {
           <p style={{color:'var(--muted2)',fontSize:'.88rem'}}>{done} tasks done · {overdue>0?`${overdue} overdue ⚠️`:'no overdue ✅'} · {members.length} team members · <span style={{color:'var(--green)'}}>● live</span></p>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:14,marginBottom:20}}>
-          {[{label:'Health Score',value:healthScore,suffix:'/100',color:'#7C5CFC',glow:'#7C5CFC'},{label:'Tasks Done',value:done,suffix:` of ${total}`,color:'var(--green)',glow:'#00E5A0'},{label:'In Progress',value:inProg,suffix:' tasks',color:'var(--cyan)',glow:'#00D4FF'},{label:'Under Review',value:review,suffix:' tasks',color:'var(--yellow)',glow:'#FFD60A'},{label:'Overdue',value:overdue,suffix:' tasks',color:overdue>0?'var(--red)':'var(--green)',glow:'#FF4D6D'},{label:'Avg Quality',value:avgQuality||'—',suffix:avgQuality?'/5':'',color:'var(--orange)',glow:'#FF8C42'}].map(k=>(
+          {[{label:'Health Score',value:healthScore,suffix:'/100',color:'#7C5CFC',glow:'#7C5CFC',key:null},{label:'Tasks Done',value:done,suffix:` of ${total}`,color:'var(--green)',glow:'#00E5A0',key:'done'},{label:'In Progress',value:inProg,suffix:' tasks',color:'var(--cyan)',glow:'#00D4FF',key:'inprogress'},{label:'Under Review',value:review,suffix:' tasks',color:'var(--yellow)',glow:'#FFD60A',key:'review'},{label:'To Do',value:todo,suffix:' tasks',color:'var(--muted2)',glow:'#9090AA',key:'todo'},{label:'Overdue',value:overdue,suffix:' tasks',color:overdue>0?'var(--red)':'var(--green)',glow:'#FF4D6D',key:'overdue'}].map(k=>(
             <Card key={k.label} hover style={{position:'relative',overflow:'hidden'}}>
               <div style={{position:'absolute',top:0,left:0,right:0,height:2.5,background:`linear-gradient(90deg,${k.glow},transparent)`}}/>
               <div style={{fontSize:'.68rem',fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'var(--muted)',marginBottom:8}}>{k.label}</div>
