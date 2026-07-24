@@ -60,19 +60,6 @@ export default function Calendar() {
 
   useEffect(() => { if (status === 'unauthenticated') router.replace('/login'); }, [status]);
 
-  // Close clear menu on outside click
-  useEffect(() => {
-    if (!showClearMenu) return;
-    const h = e => {
-      try {
-        const wrap = document.querySelector('.clear-menu-wrap');
-        if (wrap && !wrap.contains(e.target)) setShowClearMenu(false);
-      } catch(err) { setShowClearMenu(false); }
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [showClearMenu]);
-
   const isAdmin = session?.user?.role === 'admin';
 
   const [calendars,         setCalendars]         = useState([]);
@@ -107,6 +94,19 @@ export default function Calendar() {
   const [importantDays,    setImportantDays]    = useState([]);
   const [showDayPanel,     setShowDayPanel]     = useState(false);
   const [showClearMenu,    setShowClearMenu]    = useState(false);
+
+  // Close clear menu on outside click — MUST be after showClearMenu is declared
+  useEffect(() => {
+    if (!showClearMenu) return;
+    const h = e => {
+      try {
+        const wrap = document.querySelector('.clear-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) setShowClearMenu(false);
+      } catch(err) { setShowClearMenu(false); }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [showClearMenu]);
   const [dayForm,          setDayForm]          = useState({ title:'', date:'', color:'#FF4D6D', emoji:'🎉', recurring:true });
   const [addingDay,        setAddingDay]        = useState(false);
 
