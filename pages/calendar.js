@@ -63,7 +63,12 @@ export default function Calendar() {
   // Close clear menu on outside click
   useEffect(() => {
     if (!showClearMenu) return;
-    const h = e => { if (!e.target.closest('.clear-menu-wrap')) setShowClearMenu(false); };
+    const h = e => {
+      try {
+        const wrap = document.querySelector('.clear-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) setShowClearMenu(false);
+      } catch(err) { setShowClearMenu(false); }
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [showClearMenu]);
