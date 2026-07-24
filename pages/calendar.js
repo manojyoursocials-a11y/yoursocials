@@ -489,19 +489,19 @@ export default function Calendar() {
 
                       {/* ── THIS MONTH ── */}
                       <div style={{ padding:'8px 14px', fontSize:'.65rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', borderBottom:'1px solid var(--border)', background:'var(--surface3)' }}>
-                        Clear This Month ({new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'})})
+                        Clear This Month ({curDate.toLocaleString('en-IN',{month:'long',year:'numeric'})})
                       </div>
                       {/* This month — specific brand */}
                       {calendars.map(cal => (
                         <button key={'m-'+cal.id}
                           onClick={async () => {
-                            const mLabel = new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'});
+                            const mLabel = curDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
                             if (!confirm(`Clear ${cal.name} posts for ${mLabel}?`)) return;
                             setShowClearMenu(false);
-                            const ym = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+                            const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
                             await fetch(`/api/calendar?clearMonth=${ym}&calId=${cal.id}`, { method:'DELETE' });
                             toast.success(`Cleared ${cal.name} for ${mLabel}`);
-                            loadMonthPosts(new Date(currentYear, currentMonth));
+                            loadMonthPosts(curDate);
                           }}
                           style={{ width:'100%', padding:'8px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.8rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
@@ -513,13 +513,13 @@ export default function Calendar() {
                       {/* This month — ALL brands */}
                       <button
                         onClick={async () => {
-                          const mLabel = new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'});
+                          const mLabel = curDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
                           if (!confirm(`Clear ALL calendar posts for ${mLabel}?`)) return;
                           setShowClearMenu(false);
-                          const ym = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+                          const ym = `${curDate.getFullYear()}-${String(curDate.getMonth()+1).padStart(2,'0')}`;
                           await fetch(`/api/calendar?clearMonth=${ym}&calId=all`, { method:'DELETE' });
                           toast.success(`All posts cleared for ${mLabel}`);
-                          loadMonthPosts(new Date(currentYear, currentMonth));
+                          loadMonthPosts(curDate);
                         }}
                         style={{ width:'100%', padding:'9px 14px', background:'rgba(255,214,10,.06)', border:'none', textAlign:'left', color:'#FFD60A', cursor:'pointer', fontSize:'.8rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
                         onMouseEnter={e=>e.currentTarget.style.background='rgba(255,214,10,.12)'}
@@ -538,7 +538,7 @@ export default function Calendar() {
                             setShowClearMenu(false);
                             await fetch(`/api/calendar?clear=${cal.id}`, { method:'DELETE' });
                             toast.success(`Cleared all posts from ${cal.name}`);
-                            loadMonthPosts(new Date(currentYear, currentMonth));
+                            loadMonthPosts(curDate);
                           }}
                           style={{ width:'100%', padding:'8px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.8rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
@@ -556,7 +556,7 @@ export default function Calendar() {
                           setShowClearMenu(false);
                           await fetch('/api/calendar?clear=all', { method:'DELETE' });
                           toast.success('All calendar posts cleared');
-                          loadMonthPosts(new Date(currentYear, currentMonth));
+                          loadMonthPosts(curDate);
                         }}
                         style={{ width:'100%', padding:'10px 14px', background:'rgba(255,77,109,.08)', border:'none', textAlign:'left', color:'#FF4D6D', cursor:'pointer', fontSize:'.8rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8 }}
                         onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.18)'}
