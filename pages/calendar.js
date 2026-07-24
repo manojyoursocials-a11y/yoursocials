@@ -60,6 +60,14 @@ export default function Calendar() {
 
   useEffect(() => { if (status === 'unauthenticated') router.replace('/login'); }, [status]);
 
+  // Close clear menu on outside click
+  useEffect(() => {
+    if (!showClearMenu) return;
+    const h = e => { if (!e.target.closest('.clear-menu-wrap')) setShowClearMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [showClearMenu]);
+
   const isAdmin = session?.user?.role === 'admin';
 
   const [calendars,         setCalendars]         = useState([]);
@@ -93,6 +101,7 @@ export default function Calendar() {
   // Important days / festivals
   const [importantDays,    setImportantDays]    = useState([]);
   const [showDayPanel,     setShowDayPanel]     = useState(false);
+  const [showClearMenu,    setShowClearMenu]    = useState(false);
   const [dayForm,          setDayForm]          = useState({ title:'', date:'', color:'#FF4D6D', emoji:'🎉', recurring:true });
   const [addingDay,        setAddingDay]        = useState(false);
 
@@ -463,6 +472,52 @@ export default function Calendar() {
                 style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', background:showDayPanel?'rgba(255,77,109,.15)':'var(--surface2)', border:`1px solid ${showDayPanel?'rgba(255,77,109,.4)':'var(--border)'}`, borderRadius:8, color:showDayPanel?'#FF4D6D':'var(--muted2)', cursor:'pointer', fontSize:'.76rem', fontWeight:600, fontFamily:'Inter,sans-serif', transition:'all .15s', whiteSpace:'nowrap' }}>
                 🎉 Festivals{importantDays.length>0?' ('+importantDays.length+')':''}
               </button>
+              {isAdmin && (
+                <div style={{ position:'relative' }} className="clear-menu-wrap">
+                  <button
+                    onClick={()=>setShowClearMenu(o=>!o)}
+                    style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', background:'rgba(255,77,109,.08)', border:'1px solid rgba(255,77,109,.25)', borderRadius:8, color:'#FF4D6D', cursor:'pointer', fontSize:'.76rem', fontWeight:600, fontFamily:'Inter,sans-serif', whiteSpace:'nowrap' }}>
+                    🗑 Clear
+                  </button>
+                  {showClearMenu && (
+                    <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:12, boxShadow:'0 8px 32px rgba(0,0,0,.4)', zIndex:999, minWidth:220, overflow:'hidden' }}>
+                      <div style={{ padding:'8px 12px', fontSize:'.68rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', borderBottom:'1px solid var(--border)' }}>Clear Calendar Posts</div>
+                      {/* Clear specific calendar */}
+                      {calendars.map(cal => (
+                        <button key={cal.id}
+                          onClick={async () => {
+                            if (!confirm(`Clear ALL posts from "${cal.name}"? This cannot be undone.`)) return;
+                            setShowClearMenu(false);
+                            await fetch(`/api/calendar?clear=${cal.id}`, { method: 'DELETE' });
+                            toast.success(`Cleared all posts from ${cal.name}`);
+                            loadMonthPosts(new Date(currentYear, currentMonth));
+                          }}
+                          style={{ width:'100%', padding:'9px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.82rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
+                          onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                          <div style={{ width:10, height:10, borderRadius:'50%', background:cal.color, flexShrink:0 }}/>
+                          Clear {cal.name}
+                        </button>
+                      ))}
+                      {/* Clear ALL */}
+                      <button
+                        onClick={async () => {
+                          if (!confirm('⚠️ Clear ALL posts from ALL calendars? This CANNOT be undone.')) return;
+                          if (!confirm('Are you absolutely sure? All calendar content will be permanently deleted.')) return;
+                          setShowClearMenu(false);
+                          await fetch('/api/calendar?clear=all', { method: 'DELETE' });
+                          toast.success('All calendar posts cleared');
+                          loadMonthPosts(new Date(currentYear, currentMonth));
+                        }}
+                        style={{ width:'100%', padding:'10px 14px', background:'rgba(255,77,109,.08)', border:'none', textAlign:'left', color:'#FF4D6D', cursor:'pointer', fontSize:'.82rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8 }}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.15)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='rgba(255,77,109,.08)'}>
+                        🗑 Clear ALL Calendars
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <Btn onClick={() => openNewPost(selectedDay || todayStr)}>+ New Post</Btn>
           </div>

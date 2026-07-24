@@ -51,6 +51,18 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
+    // Clear all posts from a calendar (admin only)
+    if (req.query.clear === 'all') {
+      if (session.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+      await db.clearAllCalendarPosts();
+      return res.json({ ok: true, message: 'All calendar posts cleared' });
+    }
+    if (req.query.clear) {
+      if (session.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+      await db.clearCalendarPosts(req.query.clear);
+      return res.json({ ok: true, message: 'Calendar posts cleared' });
+    }
+
     const { id, type } = req.query;
     if (type === 'calendar') await db.deleteCalendar(id);
     else await db.deletePost(id);
