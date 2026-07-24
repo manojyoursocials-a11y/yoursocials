@@ -485,39 +485,83 @@ export default function Calendar() {
                     🗑 Clear
                   </button>
                   {showClearMenu && (
-                    <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:12, boxShadow:'0 8px 32px rgba(0,0,0,.4)', zIndex:999, minWidth:220, overflow:'hidden' }}>
-                      <div style={{ padding:'8px 12px', fontSize:'.68rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', borderBottom:'1px solid var(--border)' }}>Clear Calendar Posts</div>
-                      {/* Clear specific calendar */}
+                    <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, background:'var(--surface2)', border:'1px solid var(--border2)', borderRadius:12, boxShadow:'0 8px 40px rgba(0,0,0,.5)', zIndex:999, minWidth:260, overflow:'hidden', maxHeight:'80vh', overflowY:'auto' }}>
+
+                      {/* ── THIS MONTH ── */}
+                      <div style={{ padding:'8px 14px', fontSize:'.65rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', borderBottom:'1px solid var(--border)', background:'var(--surface3)' }}>
+                        Clear This Month ({new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'})})
+                      </div>
+                      {/* This month — specific brand */}
                       {calendars.map(cal => (
-                        <button key={cal.id}
+                        <button key={'m-'+cal.id}
                           onClick={async () => {
-                            if (!confirm(`Clear ALL posts from "${cal.name}"? This cannot be undone.`)) return;
+                            const mLabel = new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'});
+                            if (!confirm(`Clear ${cal.name} posts for ${mLabel}?`)) return;
                             setShowClearMenu(false);
-                            await fetch(`/api/calendar?clear=${cal.id}`, { method: 'DELETE' });
+                            const ym = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+                            await fetch(`/api/calendar?clearMonth=${ym}&calId=${cal.id}`, { method:'DELETE' });
+                            toast.success(`Cleared ${cal.name} for ${mLabel}`);
+                            loadMonthPosts(new Date(currentYear, currentMonth));
+                          }}
+                          style={{ width:'100%', padding:'8px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.8rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
+                          onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                          <div style={{ width:9, height:9, borderRadius:'50%', background:cal.color, flexShrink:0 }}/>
+                          {cal.name}
+                        </button>
+                      ))}
+                      {/* This month — ALL brands */}
+                      <button
+                        onClick={async () => {
+                          const mLabel = new Date(currentYear, currentMonth).toLocaleString('en-IN',{month:'long',year:'numeric'});
+                          if (!confirm(`Clear ALL calendar posts for ${mLabel}?`)) return;
+                          setShowClearMenu(false);
+                          const ym = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+                          await fetch(`/api/calendar?clearMonth=${ym}&calId=all`, { method:'DELETE' });
+                          toast.success(`All posts cleared for ${mLabel}`);
+                          loadMonthPosts(new Date(currentYear, currentMonth));
+                        }}
+                        style={{ width:'100%', padding:'9px 14px', background:'rgba(255,214,10,.06)', border:'none', textAlign:'left', color:'#FFD60A', cursor:'pointer', fontSize:'.8rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(255,214,10,.12)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='rgba(255,214,10,.06)'}>
+                        🗑 All brands this month
+                      </button>
+
+                      {/* ── BY BRAND (all time) ── */}
+                      <div style={{ padding:'8px 14px', fontSize:'.65rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'.08em', borderBottom:'1px solid var(--border)', background:'var(--surface3)' }}>
+                        Clear Brand (All Time)
+                      </div>
+                      {calendars.map(cal => (
+                        <button key={'b-'+cal.id}
+                          onClick={async () => {
+                            if (!confirm(`Clear ALL posts ever from "${cal.name}"? Cannot be undone.`)) return;
+                            setShowClearMenu(false);
+                            await fetch(`/api/calendar?clear=${cal.id}`, { method:'DELETE' });
                             toast.success(`Cleared all posts from ${cal.name}`);
                             loadMonthPosts(new Date(currentYear, currentMonth));
                           }}
-                          style={{ width:'100%', padding:'9px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.82rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
+                          style={{ width:'100%', padding:'8px 14px', background:'none', border:'none', textAlign:'left', color:'var(--text)', cursor:'pointer', fontSize:'.8rem', fontFamily:'inherit', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--surface3)'}
                           onMouseLeave={e=>e.currentTarget.style.background='none'}>
-                          <div style={{ width:10, height:10, borderRadius:'50%', background:cal.color, flexShrink:0 }}/>
-                          Clear {cal.name}
+                          <div style={{ width:9, height:9, borderRadius:'50%', background:cal.color, flexShrink:0 }}/>
+                          {cal.name}
                         </button>
                       ))}
-                      {/* Clear ALL */}
+
+                      {/* ── NUCLEAR: ALL ── */}
                       <button
                         onClick={async () => {
-                          if (!confirm('⚠️ Clear ALL posts from ALL calendars? This CANNOT be undone.')) return;
-                          if (!confirm('Are you absolutely sure? All calendar content will be permanently deleted.')) return;
+                          if (!confirm('⚠️ Clear EVERYTHING from ALL calendars ALL time? Cannot be undone.')) return;
+                          if (!confirm('Last chance — are you 100% sure?')) return;
                           setShowClearMenu(false);
-                          await fetch('/api/calendar?clear=all', { method: 'DELETE' });
+                          await fetch('/api/calendar?clear=all', { method:'DELETE' });
                           toast.success('All calendar posts cleared');
                           loadMonthPosts(new Date(currentYear, currentMonth));
                         }}
-                        style={{ width:'100%', padding:'10px 14px', background:'rgba(255,77,109,.08)', border:'none', textAlign:'left', color:'#FF4D6D', cursor:'pointer', fontSize:'.82rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8 }}
-                        onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.15)'}
+                        style={{ width:'100%', padding:'10px 14px', background:'rgba(255,77,109,.08)', border:'none', textAlign:'left', color:'#FF4D6D', cursor:'pointer', fontSize:'.8rem', fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', gap:8 }}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(255,77,109,.18)'}
                         onMouseLeave={e=>e.currentTarget.style.background='rgba(255,77,109,.08)'}>
-                        🗑 Clear ALL Calendars
+                        🗑 Clear EVERYTHING (all brands, all time)
                       </button>
                     </div>
                   )}

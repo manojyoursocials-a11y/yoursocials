@@ -51,7 +51,16 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    // Clear all posts from a calendar (admin only)
+    // Clear posts (admin only)
+    if (!session.user.role === 'admin') return res.status(403).json({ error: 'Admin only' });
+    // Month-wise clear: ?clearMonth=YYYY-MM&calId=xxx or all
+    if (req.query.clearMonth) {
+      if (session.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+      const [year, month] = req.query.clearMonth.split('-').map(Number);
+      const calId = req.query.calId || 'all';
+      await db.clearCalendarPostsByMonth(calId, year, month);
+      return res.json({ ok: true });
+    }
     if (req.query.clear === 'all') {
       if (session.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
       await db.clearAllCalendarPosts();
