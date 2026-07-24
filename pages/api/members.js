@@ -3,6 +3,7 @@ import { authOptions } from '../../lib/auth';
 import { getDb } from '../../lib/db';
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: 'Unauthorized' });
   const db = getDb();

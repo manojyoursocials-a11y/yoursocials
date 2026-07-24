@@ -10,6 +10,8 @@ export default async function handler(req, res) {
     const db = getDb();
 
     if (req.method === 'GET') {
+    // Tell Vercel edge not to cache this (user-specific), but tell CDN to not re-request
+    res.setHeader('Cache-Control', 'private, no-store');
       try {
         if (req.query.since) {
           const notifs = await db.getNewNotifications(userId, req.query.since);

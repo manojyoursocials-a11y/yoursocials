@@ -16,7 +16,7 @@ function LiveRefresher() {
       timerRef.current = setInterval(() => {
         // Silently refresh current page data (re-runs getServerSideProps/getStaticProps)
         router.replace(router.asPath, undefined, { scroll: false });
-      }, 60000);
+      }, 120000);
     }
 
     // Start on focus, stop on blur (don't refresh hidden tabs unnecessarily)

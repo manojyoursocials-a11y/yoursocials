@@ -42,7 +42,7 @@ export default function Dashboard() {
     if (status === 'authenticated') {
       fetch('/api/setup', { method:'POST' }).finally(fetchData);
       fetchAdminData();
-      const t = setInterval(fetchData, 60000);
+      const t = setInterval(fetchData, 120000);
       return () => clearInterval(t);
     }
   }, [status, fetchData, fetchAdminData]);
