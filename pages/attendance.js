@@ -164,8 +164,8 @@ export default function Attendance() {
                   )}
                   {isAdmin && (
                     <button onClick={()=>{setShowMark({user:m,date:todayStr});setMarkStatus(rec?.status||'present');setMarkNote(rec?.note||'');}}
-                      style={{width:'100%',padding:'7px',background:'rgba(124,92,252,.12)',border:'1px solid rgba(124,92,252,.25)',borderRadius:8,color:'var(--purple2)',cursor:'pointer',fontSize:'.78rem',fontWeight:700,fontFamily:'inherit'}}>
-                      ✏️ {rec ? 'Update' : 'Mark Attendance'}
+                      style={{width:'100%',padding:'8px',background: rec ? st.bg : 'rgba(124,92,252,.12)', border:`1px solid ${rec ? st.color+'55' : 'rgba(124,92,252,.25)'}`,borderRadius:8,color: rec ? st.color : 'var(--purple2)',cursor:'pointer',fontSize:'.8rem',fontWeight:700,fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                      <span>✏️</span> {rec ? `Change from ${st.label}` : 'Mark Attendance'}
                     </button>
                   )}
                 </Card>
@@ -279,7 +279,7 @@ export default function Attendance() {
 
       {/* ── MARK ATTENDANCE MODAL ── */}
       {showMark && showMark.user && (
-        <Modal open title={`Mark Attendance — ${showMark.user.name}`} onClose={()=>setShowMark(null)}>
+        <Modal open={true} title={`Mark Attendance — ${showMark.user.name}`} onClose={()=>setShowMark(null)}>
           <div style={{display:'flex',flexDirection:'column',gap:14}}>
             <div style={{fontSize:'.78rem',color:'var(--muted2)',textAlign:'center'}}>
               📅 {new Date(showMark.date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
@@ -313,7 +313,7 @@ export default function Attendance() {
 
       {/* ── BULK MARK TODAY MODAL ── */}
       {showMark && showMark.bulk && (
-        <Modal open title="✅ Mark Attendance — Today" onClose={()=>setShowMark(null)} width={680}>
+        <Modal open={true} title="✅ Mark Attendance — Today" onClose={()=>setShowMark(null)} width={680}>
           <div style={{display:'flex',flexDirection:'column',gap:12}}>
             <div style={{fontSize:'.78rem',color:'var(--muted2)',textAlign:'center'}}>
               📅 {new Date(todayStr+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
@@ -351,6 +351,7 @@ export default function Attendance() {
           </div>
         </Modal>
       )}
+    <style>{`.att-cell:hover > div { background: rgba(124,92,252,.15) !important; border-color: rgba(124,92,252,.4) !important; }`}</style>
     </Layout>
   );
 }
