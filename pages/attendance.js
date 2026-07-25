@@ -251,9 +251,9 @@ export default function Attendance() {
 
                             return (
                               <td key={d}
-                                onClick={()=>{ if(!isSun && !isFut) openModal(m, ds); }}
-                                title={st ? `${m.name}: ${st.label}${rec?.note?' — '+rec.note:''}` : !isSun&&!isFut?`Click to mark ${m.name}`:''}
-                                style={{padding:'3px 1px',textAlign:'center',cursor:!isSun&&!isFut?'pointer':'default'}}>
+                                onClick={()=>{ if(!isFut) openModal(m, ds); }}
+                                title={st ? `${m.name}: ${st.label}${rec?.note?' — '+rec.note:''}` : !isFut?`Click to mark ${m.name}`:''}
+                                style={{padding:'3px 1px',textAlign:'center',cursor:!isFut?'pointer':'default'}}>
                                 <div style={{
                                   width:24,height:24,borderRadius:6,margin:'0 auto',
                                   display:'flex',alignItems:'center',justifyContent:'center',
